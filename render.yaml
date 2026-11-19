@@ -1,0 +1,22 @@
+# Optional REMOTE SIMULATION only. No YouTube listener or durable database yet.
+# Before production, replace SQLite on the ephemeral filesystem with durable storage.
+services:
+  - type: web
+    name: live-cast-scoreboard-demo
+    runtime: python
+    plan: starter
+    autoDeploy: false
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    envVars:
+      - key: LIVECAST_REMOTE_TEST
+        value: "1"
+      - key: LIVECAST_DB
+        value: /tmp/livecast-demo.sqlite3
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: OPERATOR_PASSWORD
+        sync: false
+      - key: VIEW_TOKEN
+        sync: false
