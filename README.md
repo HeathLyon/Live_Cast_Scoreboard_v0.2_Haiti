@@ -75,12 +75,12 @@ python app.py                      # local-only, on 127.0.0.1:8000
 app.py                       FastAPI endpoints and remote-demo access checks
 core.py                      Parsing, points, match and rankings
 store.py                     Transactional local demo SQLite store
-web/operator.html            English control room
-web/producer.html            Haitian Creole production view
-web/overlay.html             vMix overlay HTML
-web/css/style.css            Base styles
-web/css/haiti-theme.css      Haitian blue/red/white theme overrides
-web/js/                     Client controls and refresh logic
+index.html                   English control room
+producer.html                Haitian Creole production view
+overlay.html                 vMix overlay HTML
+css/style.css                Base styles
+css/haiti-theme.css          Haitian blue/red/white theme overrides
+js/                          Client controls and refresh logic
 render.yaml                  Optional protected Render demo deployment
 setup_windows.bat            Install Python dependencies on Windows
 start_windows.bat            Run local Windows demo

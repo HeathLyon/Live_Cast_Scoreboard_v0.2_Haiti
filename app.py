@@ -26,7 +26,6 @@ import store
 from core import parse_amount_to_micros
 
 ROOT = Path(__file__).resolve().parent
-WEB = ROOT / 'web'
 REMOTE_TEST = os.getenv('LIVECAST_REMOTE_TEST', '0') == '1'
 OPERATOR_PASSWORD = os.getenv('OPERATOR_PASSWORD', '')
 VIEW_TOKEN = os.getenv('VIEW_TOKEN', '')
@@ -79,7 +78,7 @@ app = FastAPI(title='Live Cast Scoreboard — Haiti Simulation 0.2', lifespan=li
 
 @app.middleware('http')
 async def remote_test_auth(request: Request, call_next):
-    if REMOTE_TEST and request.url.path != '/health' and not request.url.path.startswith('/assets/'):
+    if REMOTE_TEST and request.url.path != '/health' and not request.url.path.startswith(('/css/', '/js/')):
         if not _operator_ok(request) and not (_viewer_route(request) and _viewer_ok(request)):
             return Response(status_code=401, content='Operator login or authorized read-only link required',
                             headers={'WWW-Authenticate':'Basic realm="Live Cast Demo Operator"',
@@ -90,21 +89,22 @@ async def remote_test_auth(request: Request, call_next):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     return response
 
-app.mount('/assets', StaticFiles(directory=str(WEB)), name='assets')
+app.mount('/css', StaticFiles(directory=ROOT / 'css'), name='css')
+app.mount('/js', StaticFiles(directory=ROOT / 'js'), name='js')
 
 @app.get('/')
 def home():
-    return FileResponse(WEB / 'operator.html')
+    return FileResponse(ROOT / 'index.html')
 
 @app.get('/producers')
 def producer_page():
-    return FileResponse(WEB / 'producer.html')
+    return FileResponse(ROOT / 'producer.html')
 
 @app.get('/overlay/{graphic_id}')
 def overlay_page(graphic_id: str):
     if store.get_graphic(graphic_id) is None:
         raise HTTPException(404, 'Unknown graphic')
-    return FileResponse(WEB / 'overlay.html')
+    return FileResponse(ROOT / 'overlay.html')
 
 @app.get('/health')
 def health():
