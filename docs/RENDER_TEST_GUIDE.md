@@ -19,7 +19,7 @@
 ## Deploy
 
 1. Push the **contents of this project folder** (with `app.py` and `render.yaml` at repository root) to GitHub. Do not upload `.venv`, `*.sqlite3`, `.env`, or secrets. Use `.gitignore`.
-2. At [Render](https://dashboard.render.com/), select **New → Blueprint**. Connect the repository containing `render.yaml`. Review the planned resources: **one starter web service**, no database.
+2. At [Render](https://dashboard.render.com/), select **New → Blueprint**. Connect the repository containing `render.yaml`. Review the planned resources: **one Free web service**, no database.
 3. When prompted for environment variables, paste `OPERATOR_PASSWORD` (12+ characters) and `VIEW_TOKEN` (24+ characters). The `render.yaml` contains **only variable names** for these secrets, not their values.
 4. Deploy. Render will run `pip install -r requirements.txt`, then start `uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1`.
 5. Open `https://YOUR-RENDER-HOST.onrender.com/health` and expect `"ok":true` and `"mode":"simulation"`.

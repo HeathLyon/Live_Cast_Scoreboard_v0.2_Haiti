@@ -12,6 +12,11 @@ def test_remote_demo_requires_credentials(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, 'VIEW_TOKEN', 'a-completely-different-view-token-456')
     with TestClient(app_module.app) as client:
         assert client.get('/health').status_code == 200
+        for asset in ('/css/style.css', '/css/haiti-theme.css', '/js/operator.js',
+                      '/js/producer.js', '/js/overlay.js'):
+            assert client.get(asset).status_code == 200
+        assert client.get('/css/app.py').status_code == 404
+        assert client.get('/js/index.html').status_code == 404
         assert client.get('/').status_code == 401
         assert client.get('/api/state').status_code == 401
         assert client.get('/overlay/top3').status_code == 401
@@ -49,9 +54,13 @@ def test_remote_mode_fails_closed_without_secrets(tmp_path, monkeypatch):
 
 def test_haiti_theme_is_loaded_and_overlay_keeps_alpha():
     root=Path(__file__).resolve().parents[1]
-    css=(root/'web/css/haiti-theme.css').read_text()
+    css=(root/'css/haiti-theme.css').read_text(encoding='utf-8')
     assert all(c in css for c in ('#00209f','#d21034','#fff'))
     assert '.overlay-body,.overlay-html{background:transparent!important}' in css
-    for page in ('operator.html','producer.html','overlay.html'):
-        assert '/assets/css/haiti-theme.css' in (root/'web'/page).read_text()
-    assert 'starter' in (root/'render.yaml').read_text()
+    for page, script in (('index.html', 'operator.js'), ('producer.html', 'producer.js'),
+                         ('overlay.html', 'overlay.js')):
+        html = (root / page).read_text(encoding='utf-8')
+        assert 'href="/css/style.css"' in html
+        assert 'href="/css/haiti-theme.css"' in html
+        assert f'src="/js/{script}"' in html
+    assert '    plan: free' in (root/'render.yaml').read_text().splitlines()
