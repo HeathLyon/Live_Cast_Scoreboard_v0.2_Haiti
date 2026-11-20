@@ -12,6 +12,11 @@ services:
     envVars:
       - key: LIVECAST_REMOTE_TEST
         value: "1"
+      # Broadcast-only rankings and alerts, publicly readable for GitHub Pages/vMix.
+      - key: PUBLIC_OVERLAYS
+        value: "1"
+      - key: PAGES_ORIGIN
+        value: "https://heathlyon.github.io"
       - key: LIVECAST_DB
         value: /tmp/livecast-demo.sqlite3
       - key: PYTHON_VERSION

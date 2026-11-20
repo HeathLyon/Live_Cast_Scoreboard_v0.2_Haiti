@@ -1,0 +1,29 @@
+LIVE CAST SCOREBOARD v0.2.1 — ROOT-LEVEL LAYOUT + RENDER FREE
+
+This version preserves the GitHub repository structure:
+  app.py, index.html, producer.html, overlay.html, css/, js/, render.yaml
+
+To update your existing GitHub repository without changing its layout,
+replace these five root-relative files:
+  app.py
+  render.yaml
+  README.md
+  tests/test_remote_theme.py
+  docs/RENDER_TEST_GUIDE.md
+
+No web/ folder is necessary. HTML/CSS/JS from your existing repo stay put.
+
+Do not set LIVECAST_REMOTE_TEST=0 on the public Render instance.
+Keep OPERATOR_PASSWORD and VIEW_TOKEN as Render environment secrets.
+Your simulation data in Render's free ephemeral filesystem will be lost on restart.
+Render Free spins down after idle and is NOT suitable for the real 24/7 show.
+Actual YouTube donations and Google Sheets are NOT connected yet.
+
+Smoke-test URLs after deployment:
+  /health
+  /  (operator password)
+  /producers?view_token=YOUR_VIEW_TOKEN
+  /overlay/top3?view_token=YOUR_VIEW_TOKEN
+  /overlay/alert?view_token=YOUR_VIEW_TOKEN
+
+Keep the alert overlay loaded BEFORE sending a simulated test donation.

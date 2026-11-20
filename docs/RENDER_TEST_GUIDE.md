@@ -1,6 +1,6 @@
 # Render sandbox testing — Live Cast v0.2 Haiti
 
-**Simulation only:** This configuration contains **no real YouTube API connection and no Google Sheets integration.** Test records on Render's default filesystem are **ephemeral** and may vanish after restarts, redeployments, or infrastructure replacement. The app deliberately displays DEMO watermarks on all graphics.
+**Simulation only, on Render Free:** This configuration contains **no real YouTube API connection and no Google Sheets integration.** Test records on Render's default filesystem are **ephemeral** and may vanish after restarts, redeployments, or infrastructure replacement. The app deliberately displays DEMO watermarks on all graphics.
 
 ## Preflight
 
@@ -18,7 +18,7 @@
 
 ## Deploy
 
-1. Push the **contents of this project folder** (with `app.py` and `render.yaml` at repository root) to GitHub. Do not upload `.venv`, `*.sqlite3`, `.env`, or secrets. Use `.gitignore`.
+1. Push the **contents of this project folder** to GitHub. Keep `app.py`, `index.html`, `producer.html`, `overlay.html`, `css/`, `js/`, and `render.yaml` at repository root. **Do not** create a `web/` folder. Do not upload `.venv`, `*.sqlite3`, `.env`, or secrets. Use `.gitignore`.
 2. At [Render](https://dashboard.render.com/), select **New → Blueprint**. Connect the repository containing `render.yaml`. Review the planned resources: **one Free web service**, no database.
 3. When prompted for environment variables, paste `OPERATOR_PASSWORD` (12+ characters) and `VIEW_TOKEN` (24+ characters). The `render.yaml` contains **only variable names** for these secrets, not their values.
 4. Deploy. Render will run `pip install -r requirements.txt`, then start `uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1`.
@@ -36,7 +36,7 @@
 
 ## Cost and operational cautions
 
-- `render.yaml` defaults to the **paid Starter** plan to avoid idle spinning down. Confirm the current price and any usage fees when creating the service. You can manually select Free for casual demonstration, but Free web services sleep after idle, so they are **not** appropriate for a 24/7 production.
+- `render.yaml` defaults to the **Free** plan for testing. Free web services sleep after 15 minutes without inbound traffic and can take around a minute to wake; they also restart periodically. They are **not** suitable for a 24/7 live listener. Upgrade to a paid always-on service for production.
 - Only **one Uvicorn worker** and **one instance** are intended for this SQLite demo.
 - **Do not use for real competition scoring.** The Render demo has no Google Sheets storage, no automatic YouTube listener, no FX conversion, and no production-grade backups.
 - `autoDeploy: false` prevents routine Git pushes from interrupting your running test. Trigger a manual deploy when you intend to update.
@@ -46,3 +46,9 @@
 ## Local alternative
 
 The same source runs on Windows with `setup_windows.bat` then `start_windows.bat`; local mode binds to `127.0.0.1:8000` and does **not** prompt for a password. Never run local mode publicly on a network interface.
+
+## Root paths for remote graphics
+
+- The Python app serves root HTML files directly. For nested `/overlay/top3` URLs, the browser resolves relative assets under `/overlay/css/` and `/overlay/js/`; the app explicitly serves those routes too.
+- CSS and JS are safe public assets. The API still requires an operator login or a read-only `VIEW_TOKEN` on approved GET routes.
+- If an existing paid Render service has already been created, editing `render.yaml` alone may not change its billing plan immediately. Check **Service → Settings → Instance Type** and switch to Free before confirming the deployment.

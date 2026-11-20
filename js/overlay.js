@@ -1,15 +1,29 @@
 'use strict';
 // The overlay never displays raw viewer comments. Only configured cast names and points go on air.
 const overlayRoot = document.getElementById('overlay-root');
-const graphicId = decodeURIComponent(location.pathname.split('/').pop());
 const overlayParams = new URLSearchParams(location.search);
+// A static GitHub Pages graphic selects its template by ?graphic=top3 or ?graphic=alert.
+const graphicId = overlayParams.get('graphic') || decodeURIComponent(location.pathname.split('/').pop());
+// ?backend=https://your-service.onrender.com chooses the public, read-only feed.
+const publicBackend = (overlayParams.get('backend') || '').trim().replace(/\/+$/, '');
+const staticMode = Boolean(publicBackend);
+if (staticMode && !/^https:\/\/[a-zA-Z0-9.-]+(?::[0-9]+)?$/.test(publicBackend)) {
+  throw new Error('The backend URL must be an HTTPS origin, without a path.');
+}
 const preview = overlayParams.get('preview') === '1';
 const viewToken = overlayParams.get('view_token') || '';
 const escapeHTML = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let graphic = null, state = null, lastRevision = -1, alertCursor = null;
 let alertQueue = [], alertActive = false, activeAlertSeq = null, graphicSignature = '';
 const fmt = v => Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-async function json(path){const res=await fetch(path,{cache:'no-store',headers:viewToken?{'X-View-Token':viewToken}:{}});if(!res.ok)throw Error('Network response '+res.status);return res.json()}
+async function json(path){
+  // Render's private endpoints still work as before; Pages never uses the operator API.
+  const target = staticMode ? publicBackend + path.replace(/^\/api\//, '/public/') : path;
+  const headers = staticMode ? {} : (viewToken ? {'X-View-Token':viewToken} : {});
+  const res = await fetch(target,{cache:'no-store',headers});
+  if(!res.ok) throw Error('Scoreboard API returned '+res.status);
+  return res.json();
+}
 function card(content,kind){
   const pos=graphic.position||'left',scale=graphic.scale||'normal';
   return `<section class="graphic-card ${kind} pos-${pos} size-${scale}" style="--accent:${escapeHTML(graphic.accent)}">${content}</section>`;
@@ -62,6 +76,7 @@ async function tick(){
     }
     graphicSignature=sig;lastRevision=current.revision;
   }catch(error){
+    // If API is unavailable, never pretend an alert is still live.
     if(graphic && graphic.kind!=='alert'){
       const previous=overlayRoot.innerHTML;
       if(previous && !previous.includes('DEKONEKTE'))overlayRoot.innerHTML=previous+'<div class="draft-watermark">DEKONEKTE — DONE YO KA PA AJOU</div>';

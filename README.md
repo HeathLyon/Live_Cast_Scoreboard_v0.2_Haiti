@@ -2,6 +2,8 @@
 
 **An offline-first, bilingual simulation for a YouTube reality-show scoreboard.**
 
+**Root-level GitHub layout:** Keep `index.html`, `producer.html`, `overlay.html`, `css/`, and `js/` in the repository root beside `app.py`. No `web/` subfolder is required.
+
 > **NOT FOR LIVE DONATIONS.** This version only accepts simulated test events; it is **not yet connected** to YouTube, Google Sheets, or a durable cloud database. Render testing is optional, and demo records hosted there are temporary. The overlays are deliberately marked `TÈS / DEMO`.
 
 ## What you can test today
@@ -50,7 +52,8 @@ Open **[`docs/RENDER_TEST_GUIDE.md`](docs/RENDER_TEST_GUIDE.md)** for exact setu
 - Local tests: `http://127.0.0.1:8000/` (no cloud account needed).
 - Render tests: the same Python app hosted behind a password; staff can open read-only, tokenized producer and vMix links.
 - **Important:** Render's default filesystem is ephemeral. Test donations and custom graphics can be lost when the service restarts. Do **not** interpret this as a durable scoreboard or run it as the live show's source of truth.
-- Render Blueprints use `render.yaml` to specify a single Starter web service; no extra database or static hosting is required for the demo.
+- Render Blueprints use `render.yaml` to specify a single **Free** web service; no extra database or static hosting is required for the demo.
+- A Free Render service may spin down after 15 minutes without inbound requests, then take time to wake. Demo data on its local SQLite filesystem is not durable; **never use this mode as the source of truth for the 24/7 live show**.
 
 ## What is NOT in this release
 
@@ -80,7 +83,7 @@ producer.html                Haitian Creole production view
 overlay.html                 vMix overlay HTML
 css/style.css                Base styles
 css/haiti-theme.css          Haitian blue/red/white theme overrides
-js/                          Client controls and refresh logic
+js/                         Client controls and refresh logic
 render.yaml                  Optional protected Render demo deployment
 setup_windows.bat            Install Python dependencies on Windows
 start_windows.bat            Run local Windows demo
@@ -91,3 +94,19 @@ tests/                       Automated test suite
 ## Two-week live production roadmap
 
 After the UI and scoring simulation is approved: (1) Google Cloud OAuth + actual YouTube Super Chat listener; (2) durable Google Sheets ledger and reconciliation; (3) authenticated accounts for staff; (4) operator/producer live presence and recovery monitoring; (5) test against a real channel with producer sign-off before 24/7 operation.
+
+
+## GitHub Pages broadcast graphics (v0.3 demo bridge)
+
+Render still calculates scores; GitHub Pages only hosts the static visual pages. The public read-only feed returns **ranks, totals, and alert text only**, never donor messages or the edit API. The operator dashboard continues on Render with Basic authentication.
+
+1. Deploy the patched `app.py` and `render.yaml` to Render. Confirm `/health` reports `public_overlays_enabled: true`. It is intentionally public demo output; do not use for private or prize-sensitive live scoring.
+2. Enable GitHub Pages in **Settings → Pages**, source **main**, folder **/(root)**.
+3. Open `https://heathlyon.github.io/Live_Cast_Scoreboard_v0.2_Haiti/pages-setup.html` (or the custom Pages origin).
+4. Enter only your base Render service URL, e.g. `https://example.onrender.com`, and press **Generate vMix links**. Do not enter your operator password or VIEW_TOKEN.
+5. Copy the generated Top 3 and Donation Alert links into separate vMix Web Browser inputs at 1920×1080, then activate both overlays. These links are hosted on **GitHub Pages**.
+6. Open the operator dashboard on Render, sign in as `operator`, and simulate `$25 #Marcus`. The Pages graphics poll the read-only Render feed. Keep the alert page open before triggering the donation.
+
+If the URLs show scores but no alert: activate the vMix alert overlay before sending a NEW donation; old alerts do not replay. If pages show no scores, check `/health`, `PUBLIC_OVERLAYS=1`, and your browser's network/CORS messages.
+
+**Important:** The public read-only feed is visible to anyone who knows its URLs. Only **broadcast data** is exposed, and both private operator API and donor transaction details remain protected. Disable the feed in production with `PUBLIC_OVERLAYS=0`. Render Free will sleep and lose ephemeral data; not suitable for a two-week 24/7 live contest.

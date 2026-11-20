@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Response, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -26,9 +27,14 @@ import store
 from core import parse_amount_to_micros
 
 ROOT = Path(__file__).resolve().parent
+# The GitHub repository keeps its HTML, CSS, and JS at the root.
+WEB = ROOT
 REMOTE_TEST = os.getenv('LIVECAST_REMOTE_TEST', '0') == '1'
 OPERATOR_PASSWORD = os.getenv('OPERATOR_PASSWORD', '')
 VIEW_TOKEN = os.getenv('VIEW_TOKEN', '')
+# Public *broadcast-only* data. The operator API and full transaction ledger stay private.
+PUBLIC_OVERLAYS = os.getenv('PUBLIC_OVERLAYS', '0') == '1'
+PAGES_ORIGIN = os.getenv('PAGES_ORIGIN', 'https://heathlyon.github.io').rstrip('/')
 
 
 def _operator_ok(request: Request) -> bool:
@@ -46,6 +52,13 @@ def _operator_ok(request: Request) -> bool:
 def _viewer_ok(request: Request) -> bool:
     provided = request.query_params.get('view_token', '') or request.headers.get('X-View-Token', '')
     return bool(provided) and secrets.compare_digest(provided, VIEW_TOKEN)
+
+
+def _public_route(request: Request) -> bool:
+    if not PUBLIC_OVERLAYS or request.method != 'GET':
+        return False
+    path = request.url.path
+    return path in ('/public/state', '/public/alerts') or bool(re.fullmatch(r'/public/graphics/[a-z0-9_-]+', path))
 
 
 def _viewer_route(request: Request) -> bool:
@@ -78,8 +91,8 @@ app = FastAPI(title='Live Cast Scoreboard — Haiti Simulation 0.2', lifespan=li
 
 @app.middleware('http')
 async def remote_test_auth(request: Request, call_next):
-    if REMOTE_TEST and request.url.path != '/health' and not request.url.path.startswith(('/css/', '/js/')):
-        if not _operator_ok(request) and not (_viewer_route(request) and _viewer_ok(request)):
+    if REMOTE_TEST and request.url.path != '/health' and not request.url.path.startswith(('/css/', '/js/', '/overlay/css/', '/overlay/js/')):
+        if not _operator_ok(request) and not (_viewer_route(request) and _viewer_ok(request)) and not _public_route(request):
             return Response(status_code=401, content='Operator login or authorized read-only link required',
                             headers={'WWW-Authenticate':'Basic realm="Live Cast Demo Operator"',
                                      'Cache-Control':'no-store', 'Referrer-Policy':'no-referrer'})
@@ -89,26 +102,68 @@ async def remote_test_auth(request: Request, call_next):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     return response
 
-app.mount('/css', StaticFiles(directory=ROOT / 'css'), name='css')
-app.mount('/js', StaticFiles(directory=ROOT / 'js'), name='js')
+# Serve only public CSS and JS folders. Never expose the repository root via StaticFiles.
+# Root HTML pages use relative assets: /css/ and /js/.
+# The nested /overlay/{id} URL resolves relative assets to /overlay/css and /overlay/js.
+# Cross-origin reads are restricted to the GitHub Pages site. No credentials are shared.
+app.add_middleware(CORSMiddleware, allow_origins=[PAGES_ORIGIN],
+                   allow_methods=['GET'], allow_headers=['Accept', 'Content-Type'],
+                   allow_credentials=False)
+
+app.mount('/css', StaticFiles(directory=str(ROOT / 'css')), name='css')
+app.mount('/js', StaticFiles(directory=str(ROOT / 'js')), name='js')
+app.mount('/overlay/css', StaticFiles(directory=str(ROOT / 'css')), name='overlay-css')
+app.mount('/overlay/js', StaticFiles(directory=str(ROOT / 'js')), name='overlay-js')
 
 @app.get('/')
 def home():
-    return FileResponse(ROOT / 'index.html')
+    return FileResponse(WEB / 'index.html')
 
 @app.get('/producers')
 def producer_page():
-    return FileResponse(ROOT / 'producer.html')
+    return FileResponse(WEB / 'producer.html')
 
 @app.get('/overlay/{graphic_id}')
 def overlay_page(graphic_id: str):
     if store.get_graphic(graphic_id) is None:
         raise HTTPException(404, 'Unknown graphic')
-    return FileResponse(ROOT / 'overlay.html')
+    return FileResponse(WEB / 'overlay.html')
 
 @app.get('/health')
 def health():
-    return {'ok':True, 'mode':'simulation', 'storage':'ephemeral-sqlite' if REMOTE_TEST else 'local-sqlite', 'version':'0.2.0', 'youtube_connected': False}
+    return {'ok':True, 'mode':'simulation', 'storage':'ephemeral-sqlite' if REMOTE_TEST else 'local-sqlite', 'version':'0.3.0', 'youtube_connected': False, 'public_overlays_enabled': PUBLIC_OVERLAYS}
+
+@app.get('/public/state')
+def public_state():
+    """Broadcast-only snapshot. Never expose the private operator's donations or review queues."""
+    if not PUBLIC_OVERLAYS:
+        raise HTTPException(404, 'Public overlay feed disabled')
+    s = store.state()
+    public_rank = lambda m: {k: m[k] for k in ('id', 'name', 'rank', 'points')}
+    return {'mode': 'SIMULATION ONLY', 'revision': s['revision'],
+            'updated_at': s['updated_at'], 'last_alert_id': s['last_alert_id'],
+            'top3': [public_rank(m) for m in s['top3']],
+            'ranking': [public_rank(m) for m in s['ranking']]}
+
+
+@app.get('/public/alerts')
+def public_alerts(after: int = 0, limit: int = 100):
+    if not PUBLIC_OVERLAYS:
+        raise HTTPException(404, 'Public overlay feed disabled')
+    safe = ('seq', 'cast_name', 'delta_points', 'new_total', 'rank')
+    return {'alerts': [{k: e[k] for k in safe} for e in store.alerts(max(0, after), limit)]}
+
+
+@app.get('/public/graphics/{graphic_id}')
+def public_graphic(graphic_id: str):
+    if not PUBLIC_OVERLAYS:
+        raise HTTPException(404, 'Public overlay feed disabled')
+    config = store.get_graphic(graphic_id, preview=False)
+    if not config:
+        raise HTTPException(404, 'Unknown graphic')
+    safe = ('id','name','kind','accent','position','scale','title_en','title_ht','duration','enabled')
+    return {k: config[k] for k in safe if k in config}
+
 
 @app.get('/api/state')
 def state():
