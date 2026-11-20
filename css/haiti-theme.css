@@ -60,3 +60,24 @@ body:not(.overlay-body){background:#060f2a}
 .overlay-watermark{border:1px solid #fff;background:linear-gradient(180deg,rgba(0,32,159,.98) 0 50%,rgba(210,16,52,.98) 50%);color:#fff}
 .draft-watermark{background:#d21034;color:#fff}
 @media(max-width:620px){.producer-wrap:before{margin:-22px -12px 24px}}
+
+/* Goal operator cards and compact broadcast lower-third (blue/red Haitian theme). */
+.goal-operator-list{display:grid;gap:10px;margin:15px 0}
+.goal-admin-row{display:flex;align-items:center;gap:12px;border-radius:9px;padding:12px 14px;background:#132958;border:1px solid #304475}
+.goal-admin-content{flex:1;min-width:0}
+.goal-progress-mini{background:#324a80;height:6px;border-radius:5px;margin-top:8px;overflow:hidden}
+.goal-progress-mini>div{height:100%;background:#d21034;transition:width .3s}
+.goal-admin-row .check-row{flex-direction:row!important}
+.goal-panel{position:absolute;left:58px;bottom:38px;width:min(800px,calc(100vw - 116px));pointer-events:none;border:1px solid rgba(255,255,255,.55);border-radius:14px;background:linear-gradient(110deg,rgba(0,32,159,.97),rgba(7,19,63,.96) 60%,rgba(210,16,52,.94));box-shadow:0 13px 38px rgba(0,0,0,.58);overflow:hidden;animation:goal-enter .4s ease both;color:#fff;font-family:Arial,sans-serif}
+.goal-top{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center;padding:18px 22px 13px}
+.goal-title{font-weight:800;letter-spacing:.05em;font-size:18px;overflow-wrap:anywhere}
+.goal-subtitle{font-size:11px;font-weight:700;color:#dce6ff;letter-spacing:.1em;margin-bottom:4px}
+.goal-count{font:800 36px 'Arial Narrow',Arial,sans-serif;text-align:right;white-space:nowrap}
+.goal-count small{font:700 14px Arial,sans-serif;color:#dce6ff}
+.goal-track{background:rgba(0,0,0,.42);height:15px;margin:0 22px 12px;border:1px solid rgba(255,255,255,.38);border-radius:10px;overflow:hidden}
+.goal-bar{height:100%;background:linear-gradient(90deg,#d21034 0%,#f95b7a 90%);transition:width .6s ease}
+.goal-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:9px 22px 10px;background:rgba(0,0,0,.2);font-size:12px;font-weight:800;letter-spacing:.06em}
+.goal-ticker{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff}
+.goal-clock{white-space:nowrap;color:#fff}
+@keyframes goal-enter{from{opacity:0;translate:0 22px}to{opacity:1;translate:0 0}}
+@media(max-width:720px){.goal-top{padding:13px;gap:8px}.goal-title{font-size:13px}.goal-count{font-size:26px}.goal-panel{left:12px;bottom:20px;width:calc(100vw - 24px)}.goal-track{margin:0 13px 8px}.goal-footer{padding:8px 13px;font-size:10px}}

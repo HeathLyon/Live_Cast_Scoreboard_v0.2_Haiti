@@ -1,9 +1,11 @@
-"""Live Cast v0.2 — protected SIMULATION for localhost and Render testing.
+"""Haiti Live Cast v0.5 -- SIMULATION + PUBLIC LIVE YOUTUBE DEMO.
 
-WARNING: This is not connected to live YouTube, and Render's demo SQLite is ephemeral.
-Remote mode demands two separate secrets: an operator password and a read-only viewer token.
+WARNING: DEMO mixes fake and actual paid events; Render Free storage is ephemeral.
+Never use these combined rankings for an official competition or payout.
+Remote mode demands two separate operator and viewer secrets.
 """
 from __future__ import annotations
+import asyncio
 import csv
 import io
 import os
@@ -25,6 +27,7 @@ from pydantic import BaseModel, Field
 
 import store
 from core import parse_amount_to_micros
+from youtube_monitor import YouTubeMonitor, video_id_from_input
 
 ROOT = Path(__file__).resolve().parent
 # The GitHub repository keeps its HTML, CSS, and JS at the root.
@@ -58,14 +61,14 @@ def _public_route(request: Request) -> bool:
     if not PUBLIC_OVERLAYS or request.method != 'GET':
         return False
     path = request.url.path
-    return path in ('/public/state', '/public/alerts') or bool(re.fullmatch(r'/public/graphics/[a-z0-9_-]+', path))
+    return path in ('/public/state', '/public/alerts', '/public/goals') or bool(re.fullmatch(r'/public/graphics/[a-z0-9_-]+', path))
 
 
 def _viewer_route(request: Request) -> bool:
     if request.method != 'GET':
         return False
     path = request.url.path
-    if path in ('/producers', '/api/state', '/api/alerts'):
+    if path in ('/producers', '/api/state', '/api/alerts', '/api/overlay/goals'):
         return True
     if re.fullmatch(r'/overlay/[a-z0-9_-]+', path):
         return request.query_params.get('preview') != '1'
@@ -75,6 +78,8 @@ def _viewer_route(request: Request) -> bool:
 
 
 
+youtube_monitor = YouTubeMonitor()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if REMOTE_TEST:
@@ -83,9 +88,16 @@ async def lifespan(app: FastAPI):
         if secrets.compare_digest(OPERATOR_PASSWORD, VIEW_TOKEN):
             raise RuntimeError('Operator password and viewer token must differ.')
     store.initialize()
-    yield
+    stop_youtube = asyncio.Event()
+    task = asyncio.create_task(youtube_monitor.run(stop_youtube))
+    try:
+        yield
+    finally:
+        stop_youtube.set()
+        youtube_monitor.configuration_changed()
+        await task
 
-app = FastAPI(title='Live Cast Scoreboard — Haiti Simulation 0.2', lifespan=lifespan,
+app = FastAPI(title='Live Cast Scoreboard — Haiti Demo 0.5', lifespan=lifespan,
               docs_url=None, redoc_url=None)
 
 
@@ -125,13 +137,15 @@ def producer_page():
 
 @app.get('/overlay/{graphic_id}')
 def overlay_page(graphic_id: str):
-    if store.get_graphic(graphic_id) is None:
+    if graphic_id not in ('goals', 'top3-alert') and store.get_graphic(graphic_id) is None:
         raise HTTPException(404, 'Unknown graphic')
     return FileResponse(WEB / 'overlay.html')
 
 @app.get('/health')
 def health():
-    return {'ok':True, 'mode':'simulation', 'storage':'ephemeral-sqlite' if REMOTE_TEST else 'local-sqlite', 'version':'0.3.0', 'youtube_connected': False, 'public_overlays_enabled': PUBLIC_OVERLAYS}
+    return {'ok':True, 'mode':'demo-mixed', 'storage':'ephemeral-sqlite' if REMOTE_TEST else 'local-sqlite',
+            'version':'0.5.0', 'youtube_connected': youtube_monitor.connected,
+            'public_overlays_enabled': PUBLIC_OVERLAYS}
 
 @app.get('/public/state')
 def public_state():
@@ -140,7 +154,7 @@ def public_state():
         raise HTTPException(404, 'Public overlay feed disabled')
     s = store.state()
     public_rank = lambda m: {k: m[k] for k in ('id', 'name', 'rank', 'points')}
-    return {'mode': 'SIMULATION ONLY', 'revision': s['revision'],
+    return {'mode': 'DEMO — LIVE + SIMULATED EVENTS MIXED', 'revision': s['revision'],
             'updated_at': s['updated_at'], 'last_alert_id': s['last_alert_id'],
             'top3': [public_rank(m) for m in s['top3']],
             'ranking': [public_rank(m) for m in s['ranking']]}
@@ -163,6 +177,102 @@ def public_graphic(graphic_id: str):
         raise HTTPException(404, 'Unknown graphic')
     safe = ('id','name','kind','accent','position','scale','title_en','title_ht','duration','enabled')
     return {k: config[k] for k in safe if k in config}
+
+
+
+@app.get('/public/goals')
+def public_goals():
+    if not PUBLIC_OVERLAYS:
+        raise HTTPException(404, 'Public overlay feed disabled')
+    return overlay_goals()
+
+@app.get('/api/overlay/goals')
+def overlay_goals():
+    return store.goals_state(public=True)
+
+@app.get('/api/goals')
+def get_goals():
+    return store.goals_state()
+
+class GoalsVisibility(BaseModel):
+    visible: bool
+
+@app.put('/api/goals/visibility')
+def goals_visibility(data: GoalsVisibility):
+    return store.set_goals_visible(data.visible)
+
+class GoalModel(BaseModel):
+    id: str = Field(min_length=2,max_length=40)
+    title: str = Field(min_length=1,max_length=90)
+    metric: Literal['assigned_points','donations_usd','youtube_usd','cast_points','manual']
+    target: str = Field(max_length=25)
+    cast_id: str | None = None
+    adjustment: str = '0'
+    manual_value: str = '0'
+    enabled: bool = True
+    start_fresh: bool = True
+    reset_baseline: bool = False
+    ends_at: str | None = None
+    ticker: str = Field(default='', max_length=160)
+    sort_order: int = Field(default=0,ge=0,le=10000)
+
+@app.post('/api/goals')
+def create_goal(goal: GoalModel):
+    try:
+        return store.upsert_goal(goal.model_dump())
+    except ValueError as exc:
+        raise HTTPException(400,str(exc))
+
+@app.put('/api/goals/{goal_id}')
+def edit_goal(goal_id: str, goal: GoalModel):
+    if goal_id != goal.id:
+        raise HTTPException(400,'Goal ID cannot be changed; create a new goal')
+    try:
+        return store.upsert_goal(goal.model_dump(), updating=True)
+    except ValueError as exc:
+        raise HTTPException(400,str(exc))
+
+@app.delete('/api/goals/{goal_id}')
+def remove_goal(goal_id: str):
+    try:
+        return store.delete_goal(goal_id)
+    except ValueError as exc:
+        raise HTTPException(400,str(exc))
+
+@app.get('/api/donations')
+def list_donations(status: Literal['pending','assigned','all']='pending',q: str='',
+                   limit: int=50, offset: int=0,
+                   source: Literal['all','simulation','youtube']='all'):
+    try:
+        return store.donation_history(status, q, limit, offset, source)
+    except ValueError as exc:
+        raise HTTPException(400,str(exc))
+
+@app.get('/api/youtube/status')
+def youtube_status():
+    return youtube_monitor.snapshot()
+
+
+class YouTubeConfig(BaseModel):
+    video: str = Field(default='', max_length=250)
+    enabled: bool = False
+
+
+@app.put('/api/youtube/config')
+async def youtube_set_config(data: YouTubeConfig):
+    try:
+        video_id = video_id_from_input(data.video) if data.video.strip() else ''
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    if data.enabled and not video_id:
+        raise HTTPException(400, 'Enter a valid live YouTube video URL before enabling')
+    if data.enabled and not youtube_monitor.api_key:
+        raise HTTPException(400, 'Add YOUTUBE_API_KEY in Render Environment first')
+    previous = youtube_monitor.config()
+    saved = store.set_youtube_config(video_id, data.enabled)
+    if saved != previous:
+        youtube_monitor.configuration_changed()
+    return saved
 
 
 @app.get('/api/state')
@@ -194,7 +304,9 @@ def simulate(data: TestDonation):
                       'userComment':data.message}}
     if data.kind == 'textMessageEvent':
         snippet = {'type':data.kind, 'textMessageDetails':{'messageText':data.message}}
-    event_id = data.event_id.strip() if data.event_id else f'simulation-{uuid.uuid4().hex}'
+    event_id = (data.event_id or '').strip() or f'simulation-{uuid.uuid4().hex}'
+    if event_id.startswith('yt:'):
+        raise HTTPException(400, 'The yt: prefix is reserved for YouTube donations')
     try:
         result = store.ingest({'id':event_id, 'snippet':snippet,
                                'authorDetails':{'displayName':data.donor}})
@@ -203,7 +315,7 @@ def simulate(data: TestDonation):
     return result
 
 class Assignment(BaseModel):
-    donation_id: str = Field(min_length=1, max_length=100)
+    donation_id: str = Field(min_length=1, max_length=153)
     cast_id: str = Field(min_length=1, max_length=50)
     reason: str = Field(default='Producer review', min_length=3, max_length=250)
 
@@ -290,7 +402,7 @@ def export_donations():
     rows = store.export_rows()
     output = io.StringIO()
     names = ['id','kind','donor','message','amount_micros','currency','amount_display',
-             'cast_id','status','points_milli','published_at','received_at']
+             'cast_id','status','points_milli','published_at','received_at','source']
     writer = csv.DictWriter(output, fieldnames=names)
     writer.writeheader()
     for row in rows:

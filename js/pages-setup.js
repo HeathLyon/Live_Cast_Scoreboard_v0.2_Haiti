@@ -13,15 +13,20 @@ form.addEventListener('submit', (event) => {
   output.replaceChildren();
   const title = document.createElement('h3'); title.textContent = 'Ready-to-paste links'; output.append(title);
   const endpoints = [
+    ['Synchronized Top 3 and donation alert', 'pages-overlay.html', 'top3-alert'],
     ['Top 3 leaderboard', 'pages-overlay.html', 'top3'],
     ['Donation alert', 'pages-overlay.html', 'alert'],
     ['Full standings', 'pages-overlay.html', 'full'],
+    ['Goals progress bar (toggle in operator)', 'pages-overlay.html', 'goals'],
     ['Producer scoreboard', 'pages-producer.html', null],
   ];
   for (const [name, page, graphic] of endpoints) {
     const url = new URL(page, location.href);
     url.searchParams.set('backend', backend.origin);
     if (graphic) url.searchParams.set('graphic', graphic);
+    if (graphic === 'top3' && document.getElementById('donation-only-top3').checked) {
+      url.searchParams.set('show', 'on-donation');
+    }
     const row = document.createElement('div'); row.className = 'panel';
     const label = document.createElement('strong'); label.textContent = name;
     const link = document.createElement('a'); link.textContent = url.href; link.href = url.href;

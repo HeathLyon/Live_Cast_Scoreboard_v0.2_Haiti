@@ -1,10 +1,30 @@
-# Live Cast Scoreboard v0.2 — Haitian flag theme
+# Live Cast Scoreboard v0.5 — Goals, YouTube and broadcast demo
 
-**An offline-first, bilingual simulation for a YouTube reality-show scoreboard.**
+**A Haitian Creole broadcast graphics demonstration with simulated donations and optional *real paid YouTube live chat* ingestion.**
+
+The **YouTube live** tab connects to a public live stream using a server-side YouTube Data API key. The **Top 3 + donation alert** graphic shows both cards in one vMix input for the duration set in the published Donation Alert preset. The standalone Top 3 stays visible by default. The operator ledger identifies simulated and real events, and the demo standings combine both sources.
 
 **Root-level GitHub layout:** Keep `index.html`, `producer.html`, `overlay.html`, `css/`, and `js/` in the repository root beside `app.py`. No `web/` subfolder is required.
 
-> **NOT FOR LIVE DONATIONS.** This version only accepts simulated test events; it is **not yet connected** to YouTube, Google Sheets, or a durable cloud database. Render testing is optional, and demo records hosted there are temporary. The overlays are deliberately marked `TÈS / DEMO`.
+> **DEMO ONLY — NOT FOR OFFICIAL DONATION ACCOUNTING.** This release can observe real paid YouTube chat events when configured but combines them with fabricated test events in the broadcast ranking. Render demo records are temporary, YouTube connection is optional, and Google Sheets / durable cloud database are not connected. `TÈS / DEMO` stays on any displayed graphic.
+
+
+## NEW v0.5 — Goal progress and retrospective review
+
+- **Goals & ticker tab:** create, edit, delete or disable multiple goals. An operator-only global switch controls whether any goal progress graphic appears on air. Active goals rotate every eight seconds.
+- **Five tracking modes:** combined assigned cast points; all USD donations (test + real); *real YouTube* USD donations only; one cast member's points; or manually entered counts such as Gold memberships. Optional countdown, message and sort order.
+- New automatic goals may **start from the current total** (count only subsequent donations) or include the full historical demo count. Operators can reset the baseline or apply an audited manual adjustment; this does not alter donor amounts.
+- **Scoring & cast tab:** add new cast members with a unique ID, or edit the names, active status and any number of valid comma-separated hashtags (up to 15 per person). Changed tags affect **future** matching; historical donations are left intact.
+- **Assignment queue:** unassigned paid events can be credited after the fact. New searchable, paginated history finds older donation events by ID, donor or message and can filter by event source. Edits recalculate cast rankings and goal progress, with an audit record; moving an already-credited donation doesn't create a fake new donation alert.
+- Public GitHub Pages goal graphics use the same narrowly scoped read-only API; no private donor messages, passwords or editing endpoints are exposed.
+
+**[Goals, Cast & Review — setup and operating guide](docs/GOALS_CAST_REVIEW.md)**
+
+**Google Sheets is optional for the demo.** The demo stores goals, donations and cast settings together in a single local SQLite file. On Render Free that file is *ephemeral*, so it is not appropriate for prize-sensitive or 14-day uninterrupted scoring. Before production, use a managed durable database (with backups and audit/reconciliation) and optionally export/sync an append-only ledger to Sheets for producer review.
+
+## Setup guide
+
+Follow **[`docs/YOUTUBE_LIVE_DEMO.md`](docs/YOUTUBE_LIVE_DEMO.md)** for the exact Google Cloud API key, Render, YouTube stream, and vMix instructions.
 
 ## What you can test today
 
@@ -31,13 +51,15 @@
 
 ### Run with vMix on the same Windows PC
 
-Add two **Web Browser** inputs in vMix at **1920×1080**:
+For the synchronized cards, add the combined URL as one **1920×1080 Web Browser** input in vMix. For a persistent Top 3, use the standalone Top 3 and Donation Alert inputs.
 
 | Layer | Local URL |
 |---|---|
-| Top 3 | `http://127.0.0.1:8000/overlay/top3` |
+| Top 3 + donation alert | `http://127.0.0.1:8000/overlay/top3-alert` |
+| Persistent Top 3 | `http://127.0.0.1:8000/overlay/top3` |
 | Donation alert | `http://127.0.0.1:8000/overlay/alert` |
 | Optional full rankings | `http://127.0.0.1:8000/overlay/full` |
+| Goals lower-third | `http://127.0.0.1:8000/overlay/goals` |
 
 The outer page background is transparent. The graphic cards are intentionally opaque enough to read on top of busy video. The `TÈS / DEMO` watermark **must stay during testing**.
 
@@ -55,12 +77,12 @@ Open **[`docs/RENDER_TEST_GUIDE.md`](docs/RENDER_TEST_GUIDE.md)** for exact setu
 - Render Blueprints use `render.yaml` to specify a single **Free** web service; no extra database or static hosting is required for the demo.
 - A Free Render service may spin down after 15 minutes without inbound requests, then take time to wake. Demo data on its local SQLite filesystem is not durable; **never use this mode as the source of truth for the 24/7 live show**.
 
-## What is NOT in this release
+## Demo limitations
 
-- Real YouTube Data API authorization or live listener; no real payments counted.
+- YouTube live chat is available as a non-production demo via a server-side API key; OAuth for nonpublic/owner operations is not included.
 - Google Sheets ledger, reconciliation, FX conversion and operator identity/roles.
-- Reliable persistent data on Render (production will use Google Sheets or a proper database).
-- Alerts that survive page reload/replay past events, and independent vMix API remote triggering.
+- Reliable persistent data on Render (production should use a managed database, with optional Google Sheets reporting).
+- Durable recovery/replay and reconciled donation alerts; the demo only follows the current public live chat feed.
 - Verified production translations (a native Haitian Creole speaker should review all labels).
 
 ## Useful commands for developers
@@ -93,10 +115,10 @@ tests/                       Automated test suite
 
 ## Two-week live production roadmap
 
-After the UI and scoring simulation is approved: (1) Google Cloud OAuth + actual YouTube Super Chat listener; (2) durable Google Sheets ledger and reconciliation; (3) authenticated accounts for staff; (4) operator/producer live presence and recovery monitoring; (5) test against a real channel with producer sign-off before 24/7 operation.
+After the UI and scoring simulation is approved: (1) production YouTube listener with reconnect/reconciliation; (2) managed durable database and audit export (optional Google Sheets mirror); (3) authenticated accounts for staff; (4) operator/producer live presence and recovery monitoring; (5) test against a real channel with producer sign-off before 24/7 operation.
 
 
-## GitHub Pages broadcast graphics (v0.3 demo bridge)
+## GitHub Pages broadcast graphics
 
 Render still calculates scores; GitHub Pages only hosts the static visual pages. The public read-only feed returns **ranks, totals, and alert text only**, never donor messages or the edit API. The operator dashboard continues on Render with Basic authentication.
 

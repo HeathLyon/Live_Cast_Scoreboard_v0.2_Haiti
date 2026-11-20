@@ -1,1 +1,1 @@
-0.2.0 Haiti Theme + Local/Render Simulation
+Live Cast Scoreboard v0.5.0 — Goals, Cast & Donation Review Demo

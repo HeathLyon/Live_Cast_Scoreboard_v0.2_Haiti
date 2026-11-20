@@ -4,25 +4,27 @@
 <body class="operator-body">
 <div class="app-shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brand-mark">LC</div><div><strong>LIVE CAST</strong><span>CONTROL ROOM • v0.2</span></div></div>
+    <div class="brand"><div class="brand-mark">LC</div><div><strong>LIVE CAST</strong><span>CONTROL ROOM • v0.5</span></div></div>
     <nav class="side-nav" aria-label="Main navigation">
       <button class="nav-button selected" data-tab="overview">◫ <span>Overview</span></button>
       <button class="nav-button" data-tab="simulator">◈ <span>Donation simulator</span></button>
+      <button class="nav-button" data-tab="youtube">◉ <span>YouTube live</span></button>
+      <button class="nav-button" data-tab="goals">◈ <span>Goals &amp; ticker</span></button>
       <button class="nav-button" data-tab="review">◎ <span>Assignment queue</span></button>
       <button class="nav-button" data-tab="graphics">▦ <span>Graphics Studio</span></button>
       <button class="nav-button" data-tab="settings">⚙ <span>Scoring & cast</span></button>
     </nav>
-    <div class="sidebar-footer"><div class="live-dot offline"></div><div><b>OFFLINE DEMO</b><small>Test events only · No real payments</small></div></div>
+    <div class="sidebar-footer"><div class="live-dot offline"></div><div><b>DEMONSTRATION</b><small>Simulated + real YouTube events may be mixed. Temporary storage.</small></div></div>
   </aside>
   <main class="main-content">
     <div class="page-top"><div><p class="eyebrow">REALITY SHOW • PRODUCTION TOOLS</p><h1 id="section-title">Operator overview</h1></div><div class="header-actions"><span id="sync-indicator" class="pill neutral">Loading…</span><a class="btn ghost" id="producer-view-link" href="/producers" target="_blank" rel="noopener">Kreyòl producer view ↗</a></div></div>
-    <div class="notice"><strong>SIMULATION / DEMO ONLY</strong> — All events are fabricated. On Render, test data is temporary and can disappear on restart or redeploy. No YouTube listener or Google Sheets connection yet. Do not use these totals for live competition results.</div>
+    <div class="notice"><strong>DEMO — NOT OFFICIAL TOTALS</strong> — Real YouTube paid events and fabricated tests can both affect the same demo rankings. Events are labelled by source in the operator ledger. Render Free storage is temporary and can be lost on restart. Not suitable for payouts or live competition results.</div>
     <p id="toast" role="status" class="toast hidden"></p>
     <section id="tab-overview" class="tab-view">
-      <div class="stats-grid"><div class="stat-card"><label>Gross USD purchases</label><b id="stat-gross">$0.00</b></div><div class="stat-card"><label>Paid donation events recorded</label><b id="stat-events">0</b></div><div class="stat-card"><label>Pending review</label><b id="stat-pending">0</b></div><div class="stat-card"><label>Current point multiplier</label><b id="stat-multiplier">1×</b></div></div>
+      <div class="stats-grid"><div class="stat-card"><label>Combined demo USD events</label><b id="stat-gross">$0.00</b></div><div class="stat-card"><label>Paid donation events recorded</label><b id="stat-events">0</b></div><div class="stat-card"><label>Pending review</label><b id="stat-pending">0</b></div><div class="stat-card"><label>Current point multiplier</label><b id="stat-multiplier">1×</b></div></div>
       <div class="columns two-one">
         <section class="panel"><div class="panel-head"><h2>Cast leaderboard</h2><span class="muted">All positions</span></div><div id="rank-list" class="ranks"></div></section>
-        <section class="panel"><div class="panel-head"><h2>Preview links</h2></div><p class="muted small">Open these in a separate window, or use them as vMix Web Browser inputs on the same computer.</p><div class="stack"><a target="_blank" rel="noopener" class="btn block ghost" href="/overlay/top3">Top 3 overlay ↗</a><a target="_blank" rel="noopener" class="btn block ghost" href="/overlay/alert">Donation alert ↗</a><a target="_blank" rel="noopener" class="btn block ghost" href="/overlay/full">All standings ↗</a></div><div class="rule"></div><h3>System status</h3><p id="system-status" class="muted small">Waiting for initial state.</p></section>
+        <section class="panel"><div class="panel-head"><h2>Preview links</h2></div><p class="muted small">Open these in a separate window, or use them as vMix Web Browser inputs on the same computer.</p><div class="stack"><a target="_blank" rel="noopener" class="btn block ghost" href="/overlay/top3-alert">Top 3 + donation alert ↗</a><a target="_blank" rel="noopener" class="btn block ghost" href="/overlay/top3">Persistent Top 3 overlay ↗</a><a target="_blank" rel="noopener" class="btn block ghost" href="/overlay/alert">Donation alert ↗</a><a target="_blank" rel="noopener" class="btn block ghost" href="/overlay/full">All standings ↗</a><a target="_blank" rel="noopener" class="btn block ghost" href="/overlay/goals">Goals overlay ↗</a></div><div class="rule"></div><h3>System status</h3><p id="system-status" class="muted small">Waiting for initial state.</p></section>
       </div>
       <section class="panel"><div class="panel-head"><h2>Recent events</h2><button class="btn ghost small" data-tab="simulator">Create test event ↗</button></div><div id="recent-list" class="event-table"></div></section>
     </section>
@@ -35,11 +37,74 @@
       <label class="span-2">Event ID (optional)<input id="sim-id" placeholder="Empty = new unique ID every time" maxlength="100"></label>
       <div class="span-2"><button class="btn primary" type="submit">Send simulated event</button></div>
       </form><pre id="sim-result" class="code-output">No events sent yet.</pre></section><section class="panel"><h2>Quick test checklist</h2><ol class="instructions"><li>Open <b>Top 3 overlay</b> in a new tab.</li><li>Send <code>$25 #Marcus</code>.</li><li>Open the <b>Donation Alert</b> overlay and send another test event.</li><li>Send <code>#Marcus #Avery</code> to check the review queue.</li><li>Send a <b>Super Sticker</b>; it should be unassigned.</li><li>Repeat a fixed event ID; the score must not increase again.</li></ol><p class="hint">The overlay intentionally says <b>TÈS / DEMO</b> to prevent accidentally airing test numbers.</p></section></div></section>
-    <section id="tab-review" class="tab-view hidden"><section class="panel"><div class="panel-head"><h2>Unassigned donation queue</h2><span id="pending-label" class="pill neutral">0 pending</span></div><p class="muted small">Only USD events can be manually credited in this build. Non-USD purchases need an agreed conversion policy. For corrections to already-assigned USD donations, use the Correct button under Recent events.</p><div id="review-list" class="review-list"></div></section></section>
+    <section id="tab-youtube" class="tab-view hidden">
+      <div class="columns two-one"><section class="panel">
+        <h2>Connect a public YouTube livestream</h2>
+        <p class="muted small">This reads actual paid Super Chats from the selected livestream. Ordinary text chat, even with cast hashtags, does not award points. The API key stays on Render and is never entered here.</p>
+        <form id="youtube-form" class="stack">
+          <label>YouTube livestream URL or video ID
+            <input id="youtube-video" placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX" autocomplete="off" required>
+          </label>
+          <label class="check-row"><input type="checkbox" id="youtube-enabled"><span>Listen for real Super Chats</span></label>
+          <button type="submit" class="btn primary">Apply YouTube connection</button>
+        </form>
+        <div class="rule"></div>
+        <p class="muted small" id="youtube-status">Reading YouTube connection status…</p>
+        <pre class="code-output" id="youtube-details">Waiting for API.</pre>
+      </section><section class="panel">
+        <h2>How to run your live demo</h2>
+        <ol class="instructions">
+          <li>Enable YouTube Data API v3 in a Google Cloud project and add a restricted <code>YOUTUBE_API_KEY</code> secret under Render Environment.</li>
+          <li>Start a <b>public livestream with live chat enabled</b>.</li>
+          <li>Paste its YouTube URL and check <b>Listen</b> here.</li>
+          <li>Wait until connection status shows <b>listening</b> before making a real paid Super Chat.</li>
+          <li>Keep the donation alert and donation-triggered Top 3 vMix inputs active.</li>
+          <li>Use Donation Simulator as a <b>separate test source</b> whenever needed.</li>
+        </ol>
+        <p class="hint">This demo intentionally combines fake and real events into ONE sample ranking. Never use the combined figures for settlement, competitions or payouts. YouTube Super Stickers and non-USD purchases still require manual review.</p>
+      </section></div>
+    </section>
+    <section id="tab-goals" class="tab-view hidden">
+      <section class="panel">
+        <div class="panel-head"><h2>Broadcast goal overlay</h2><label class="check-row"><input type="checkbox" id="goals-visible"><span>Show goals ON AIR</span></label></div>
+        <p class="muted small">Add multiple goals. The broadcast graphic rotates through enabled goals every eight seconds. Turn the entire goal graphic off instantly with the switch above, or disable goals individually. The vMix browser input stays active.</p>
+        <p><a class="btn ghost" id="goals-preview-link" href="/overlay/goals" target="_blank" rel="noopener">Open goal overlay ↗</a></p>
+        <div id="goals-list" class="goal-operator-list"></div>
+      </section>
+      <section class="panel"><h2 id="goal-editor-title">Create a goal</h2>
+        <form id="goal-form" class="form-grid">
+          <label>Goal URL ID<input id="goal-id" pattern="[a-z0-9-]{2,40}" placeholder="gold-members" required></label>
+          <label>Display title<input id="goal-title" maxlength="90" placeholder="100 GOLD MEMBERS" required></label>
+          <label>Count using<select id="goal-metric"><option value="assigned_points">All assigned cast points</option><option value="donations_usd">All USD donations (real + test)</option><option value="youtube_usd">Real YouTube USD donations only</option><option value="cast_points">Specific cast member's points</option><option value="manual">Manual count (e.g. members)</option></select></label>
+          <label>Target<input id="goal-target" type="number" min="0.001" step="0.001" value="4000" required></label>
+          <label>Cast member (for individual goal)<select id="goal-cast"><option value="">Choose a cast member</option></select></label>
+          <label>Manual current amount<input id="goal-manual" type="number" min="0" step="0.001" value="0"></label>
+          <label>Adjustment (+/-) to automatic amount<input id="goal-adjustment" type="number" step="0.001" value="0"></label>
+          <label>Countdown end (optional, local time)<input id="goal-ends" type="datetime-local"></label>
+          <label class="span-2">Kreyòl ticker message (optional)<input id="goal-ticker" maxlength="160" placeholder="Ann rive 4,000 pwen ansanm!"></label>
+          <label>Rotation order<input id="goal-order" type="number" min="0" max="10000" value="0"></label>
+          <label class="check-row"><input type="checkbox" id="goal-enabled" checked><span>Enabled for on-air rotation</span></label>
+          <label class="check-row span-2"><input type="checkbox" id="goal-start-fresh" checked><span>For new automatic goals: start counting from now (instead of including past donations)</span></label>
+          <label class="check-row span-2 hidden" id="goal-reset-row"><input type="checkbox" id="goal-reset"><span>Reset automatic progress baseline to the current total when saving</span></label>
+          <div class="button-row span-2"><button class="btn primary" type="submit" id="goal-save">Create goal</button><button class="btn ghost" id="goal-new" type="button">New blank goal</button><button class="btn danger hidden" id="goal-delete" type="button">Delete selected</button></div>
+        </form>
+        <p class="hint">Only USD donations currently count in money targets. Manual goals are for counts not provided by the YouTube API (such as membership goals). A correction to a cast assignment updates the ranking and any related goals without adding a second donation.</p>
+      </section>
+    </section>
+    <section id="tab-review" class="tab-view hidden"><section class="panel"><div class="panel-head"><h2>Unassigned donation queue</h2><span id="pending-label" class="pill neutral">0 pending</span></div><p class="muted small">Only USD events can be manually credited in this build. Non-USD purchases need an agreed conversion policy. For corrections to already-assigned USD donations, use the Correct button under Recent events.</p><div id="review-list" class="review-list"></div></section>
+      <section class="panel"><h2>Search donation history</h2><p class="muted small">Find older paid messages by viewer, comment, or YouTube event ID. You can assign any pending USD donation even if it arrived hours ago. Previously assigned donations can be corrected with an audit trail.</p>
+        <form id="donation-search-form" class="form-grid">
+          <label>Status<select id="donation-filter"><option value="pending">Unassigned only</option><option value="all">All donations</option><option value="assigned">Already assigned</option></select></label>
+          <label>Search<input id="donation-search" placeholder="Donor, hashtag or event ID"></label>
+          <label>Source<select id="donation-source"><option value="all">All sources</option><option value="youtube">Real YouTube</option><option value="simulation">Simulated</option></select></label>
+          <button class="btn primary" type="submit">Search history</button>
+        </form><div id="donation-results" class="review-list"></div>
+        <div class="button-row"><button class="btn ghost" id="donation-prev" type="button">Previous</button><span class="muted small" id="donation-page">No results yet</span><button class="btn ghost" id="donation-next" type="button">Next</button></div>
+      </section></section>
     <section id="tab-graphics" class="tab-view hidden"><div class="columns studio-grid"><section class="panel"><div class="panel-head"><h2>Saved graphics</h2><span class="muted small">Create from templates</span></div><div id="preset-list" class="preset-list"></div><div class="rule"></div><h3>Duplicate a graphic</h3><form id="clone-form" class="stack"><label>Source graphic<select id="clone-source"></select></label><label>New URL ID<input id="clone-id" placeholder="top3-night" required></label><label>Display name<input id="clone-name" placeholder="Night rankings" required></label><button class="btn ghost" type="submit">Create graphic</button></form></section>
       <section class="panel"><div class="panel-head"><h2 id="editor-title">Edit template</h2><span class="pill neutral">DRAFT → LIVE</span></div><form id="graphic-form" class="form-grid"><label class="span-2">Graphic name<input id="g-name" required></label><label>English title<input id="g-title-en"></label><label>Kreyòl title<input id="g-title-ht"></label><label>Accent color<input id="g-color" type="color" value="#d21034"></label><label>Position<select id="g-position"><option>left</option><option>center</option><option>right</option></select></label><label>Size<select id="g-scale"><option>small</option><option selected>normal</option><option>large</option></select></label><label>Alert duration (sec)<input id="g-duration" type="number" min="2" max="20" value="6"></label><label class="check-row span-2"><input type="checkbox" id="g-enabled" checked><span>Show this graphic when loaded</span></label><div class="span-2 button-row"><button class="btn ghost" type="submit">Save draft</button><button class="btn primary" type="button" id="publish-button">Publish live</button></div></form><div class="rule"></div><div class="button-row"><a class="btn ghost small" id="preview-link" target="_blank" rel="noopener">Open draft preview ↗</a><a class="btn ghost small" id="live-link" target="_blank" rel="noopener">Open live graphic ↗</a></div><p class="hint">Edit a draft, preview it, then publish. The existing vMix page picks up the published version automatically. Fully freeform drag-and-drop graphics are planned for a later build.</p></section></div></section>
     <section id="tab-settings" class="tab-view hidden"><div class="columns two-one"><section class="panel"><h2>Point system</h2><p class="muted small">Changes apply to <b>future</b> donations. Previous awards keep their original points.</p><form id="settings-form" class="stack"><label>Points awarded per $1 USD<input id="points-multiplier" inputmode="decimal" value="1" required></label><div><button type="submit" class="btn primary">Save scoring rule</button></div></form><div class="rule"></div><h3>Cast roster</h3><p class="muted small">You can update a cast member or add a new one. Use one-word hashtags with no spaces. Do not reuse the same hashtag for different cast members.</p><div id="cast-list" class="cast-list"></div><form id="cast-form" class="form-grid"><label>Cast ID<input id="cast-id" placeholder="new-contestant" required></label><label>Display name<input id="cast-name" placeholder="New Contestant" required></label><label class="span-2">Hashtags (comma separated)<input id="cast-tags" placeholder="NewContestant, TeamNew" required></label><label class="check-row span-2"><input type="checkbox" id="cast-active" checked><span>Active in leaderboard</span></label><div class="span-2"><button class="btn ghost" type="submit">Save cast member</button></div></form></section>
-       <section class="panel"><h2>Test data management</h2><p class="muted small">Download a CSV copy for inspection or import to Google Sheets. The app is <b>not yet connected</b> to Google Sheets.</p><a href="/api/export/donations.csv" class="btn ghost block">Export donation ledger CSV ↓</a><div class="rule"></div><p class="danger-note">Reset removes all simulated donations and alerts. It does not reset the cast roster or templates.</p><button class="btn danger" id="reset-button" type="button">Reset simulated donations</button><div class="rule"></div><h3>Deployment boundary</h3><p class="muted small">Local mode is restricted to your computer. Optional Render demo mode uses separate operator and read-only credentials. Neither mode accepts real YouTube donations. Do not set the server to listen on 0.0.0.0 or upload the database to GitHub.</p></section></div></section>
-    <footer class="footer">LIVE CAST / local or Render demo / v0.2.0 / no real transactions</footer>
+       <section class="panel"><h2>Test data management</h2><p class="muted small">Download a CSV copy for inspection or import to Google Sheets. The app is <b>not yet connected</b> to Google Sheets.</p><a href="/api/export/donations.csv" class="btn ghost block">Export donation ledger CSV ↓</a><div class="rule"></div><p class="danger-note">Reset clears simulated donations and their alerts. It keeps the real YouTube ledger.</p><button class="btn danger" id="reset-button" type="button">Reset simulated donations</button><div class="rule"></div><h3>Deployment boundary</h3><p class="muted small">Local mode is restricted to your computer. Optional Render demo mode uses separate operator and read-only credentials. With a YouTube API key, this demo can ingest real paid Super Chats, but combined totals are not production-grade. Do not set the server to listen on 0.0.0.0 or upload the database to GitHub.</p></section></div></section>
+    <footer class="footer">LIVE CAST / v0.5.0 / mixed-source demonstration, not official scoring</footer>
   </main>
 </div><script src="js/operator.js" defer></script></body></html>

@@ -2,6 +2,127 @@
 const el = id => document.getElementById(id);
 const money = micros => '$' + (Number(micros) / 1_000_000).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const escaped = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// Operator goal editor and searchable historical review queue.
+let goalEditId = null, goalSnapshot = null, donationOffset = 0, donationTotal = 0;
+const searchLimit=50;
+const dateFromUTC = v => {
+  if(!v)return '';
+  const d=new Date(v), local=new Date(d.getTime()-d.getTimezoneOffset()*60000);
+  return local.toISOString().slice(0,16);
+};
+function clearGoal(){
+  goalEditId=null;
+  el('goal-form').reset();
+  el('goal-id').readOnly=false;el('goal-id').value='';
+  el('goal-target').value='4000';el('goal-manual').value='0';el('goal-adjustment').value='0';
+  el('goal-enabled').checked=true;el('goal-start-fresh').checked=true;
+  el('goal-editor-title').textContent='Create a goal';el('goal-save').textContent='Create goal';
+  el('goal-delete').classList.add('hidden');el('goal-reset-row').classList.add('hidden');
+}
+function editGoal(id){
+  const g=goalSnapshot?.goals.find(x=>x.id===id);if(!g)return;
+  goalEditId=g.id;
+  el('goal-id').value=g.id;el('goal-id').readOnly=true;
+  el('goal-title').value=g.title;el('goal-metric').value=g.metric;
+  el('goal-target').value=g.target;el('goal-cast').value=g.cast_id||'';
+  el('goal-manual').value=g.manual_value;el('goal-adjustment').value=g.adjustment;
+  el('goal-ends').value=dateFromUTC(g.ends_at);
+  el('goal-ticker').value=g.ticker;el('goal-order').value=g.sort_order;
+  el('goal-enabled').checked=g.enabled;
+  el('goal-editor-title').textContent='Editing: '+g.title;
+  el('goal-save').textContent='Save changes';
+  el('goal-reset').checked=false;
+  el('goal-delete').classList.remove('hidden');el('goal-reset-row').classList.remove('hidden');
+}
+async function refreshGoals(){
+  const data=await request('/api/goals');goalSnapshot=data;
+  el('goals-visible').checked=data.visible;
+  const list=el('goals-list');
+  list.innerHTML=data.goals.length?data.goals.map(g=>`<div class="goal-admin-row">
+    <div class="goal-admin-content"><strong>${escaped(g.title)}</strong><div class="muted small">${escaped(g.metric.replaceAll('_',' '))} · ${escaped(g.current)} / ${escaped(g.target)} · ${g.percent}%</div>
+    <div class="goal-progress-mini"><div style="width:${g.percent}%"></div></div></div>
+    <label class="check-row"><input type="checkbox" data-goal-toggle="${escaped(g.id)}" ${g.enabled?'checked':''}><span>On</span></label>
+    <button type="button" class="btn ghost small" data-goal-edit="${escaped(g.id)}">Edit</button></div>`).join(''):
+    '<p class="muted small">No goals yet. Create one below to show a countdown and progress bar in vMix.</p>';
+  list.querySelectorAll('[data-goal-edit]').forEach(b=>b.addEventListener('click',()=>editGoal(b.dataset.goalEdit)));
+  list.querySelectorAll('[data-goal-toggle]').forEach(b=>b.addEventListener('change',async()=>{
+    const g=data.goals.find(x=>x.id===b.dataset.goalToggle);
+    if(!g)return;
+    try{await put('/api/goals/'+encodeURIComponent(g.id),goalPayload(g,{enabled:b.checked}));await refreshGoals();toast('Goal visibility updated live.');}
+    catch(err){toast(err.message,true);await refreshGoals()}
+  }));
+  if(snapshot){
+    const selected=el('goal-cast').value;
+    el('goal-cast').innerHTML='<option value="">Choose a cast member</option>'+snapshot.cast.map(c=>`<option value="${escaped(c.id)}">${escaped(c.name)}</option>`).join('');
+    el('goal-cast').value=selected;
+  }
+}
+function goalPayload(g,overrides={}){
+  return {id:g.id,title:g.title,metric:g.metric,target:g.target,cast_id:g.cast_id||null,
+    manual_value:g.manual_value, adjustment:g.adjustment,ends_at:g.ends_at,
+    ticker:g.ticker,sort_order:g.sort_order,enabled:g.enabled,start_fresh:false,...overrides};
+}
+function readGoalForm(){
+  return {id:el('goal-id').value.trim().toLowerCase(),title:el('goal-title').value.trim(),
+    metric:el('goal-metric').value,target:el('goal-target').value,
+    cast_id:el('goal-cast').value||null,manual_value:el('goal-manual').value||'0',
+    adjustment:el('goal-adjustment').value||'0',
+    ends_at:el('goal-ends').value?new Date(el('goal-ends').value).toISOString():null,
+    ticker:el('goal-ticker').value,sort_order:Number(el('goal-order').value||0),
+    enabled:el('goal-enabled').checked,start_fresh:el('goal-start-fresh').checked,
+    reset_baseline:el('goal-reset').checked};
+}
+function historyRow(e){
+  const options=(snapshot?.cast||[]).filter(c=>c.active).map(c=>`<option value="${escaped(c.id)}" ${c.id===e.cast_id?'selected':''}>${escaped(c.name)}</option>`).join('');
+  return `<div class="review-item" data-history="${escaped(e.id)}">
+    <div class="review-body"><b>${escaped(e.donor)} · ${money(e.amount_micros)} ${escaped(e.currency)}</b>
+    <small>${escaped(e.message||'(Super Sticker)')} · ${escaped(e.status)} · ${e.source==='youtube'?'REAL YOUTUBE':'SIMULATED'} · ${escaped(e.received_at)}</small>
+    <small>Event: ${escaped(e.id)}</small></div>
+    <div class="review-controls">${e.currency==='USD'?`<select aria-label="Select cast member">${options}</select><input aria-label="Assignment reason" value="Producer review" maxlength="250"><button type="button" class="btn primary small" data-hist-assign="${escaped(e.id)}">${e.status==='assigned'?'Correct':'Assign'}</button>`:'<span class="status-pill review_currency">FX policy required</span>'}</div>
+  </div>`;
+}
+async function refreshHistory(){
+  const params=new URLSearchParams({status:el('donation-filter').value,source:el('donation-source').value,q:el('donation-search').value,limit:String(searchLimit),offset:String(donationOffset)});
+  const result=await request('/api/donations?'+params);
+  donationTotal=result.total;
+  const div=el('donation-results');div.innerHTML=result.items.map(historyRow).join('')||'<p class="muted small">No matching donations.</p>';
+  el('donation-page').textContent=result.total?`${donationOffset+1}–${donationOffset+result.items.length} of ${result.total}`:'No matches';
+  el('donation-prev').disabled=donationOffset===0;
+  el('donation-next').disabled=donationOffset+searchLimit>=donationTotal;
+  div.querySelectorAll('[data-hist-assign]').forEach(b=>b.addEventListener('click',async()=>{
+    const row=b.closest('[data-history]'), cast=row.querySelector('select').value,reason=row.querySelector('input').value;
+    if(!reason.trim() || reason.trim().length<3){toast('Include an assignment reason.',true);return;}
+    try{const ans=await post('/api/assign',{donation_id:row.dataset.history,cast_id:cast,reason});
+      toast(ans.result==='unchanged'?'Donation already assigned to this cast.':'Assignment audited and rankings recalculated.');
+      await refreshState();await refreshHistory();}
+    catch(err){toast(err.message,true)}
+  }));
+}
+function bindGoals(){
+  clearGoal();
+  el('goal-new').addEventListener('click',clearGoal);
+  el('goals-visible').addEventListener('change',async e=>{
+    try{await put('/api/goals/visibility',{visible:e.target.checked});toast(e.target.checked?'Goal graphic enabled on air.':'Goal graphic hidden on air.');await refreshGoals();}
+    catch(err){toast(err.message,true);await refreshGoals()}
+  });
+  el('goal-form').addEventListener('submit',async e=>{e.preventDefault();
+    try{const goal=readGoalForm();if(goalEditId)await put('/api/goals/'+encodeURIComponent(goalEditId),goal);
+      else await post('/api/goals',goal);
+      toast('Goal saved. vMix graphics refresh automatically.');await refreshGoals();editGoal(goal.id);
+    }catch(err){toast(err.message,true)}
+  });
+  el('goal-delete').addEventListener('click',async()=>{
+    if(!goalEditId||!confirm('Delete this goal? This cannot be undone.'))return;
+    try{await request('/api/goals/'+encodeURIComponent(goalEditId),{method:'DELETE'});
+      clearGoal();await refreshGoals();toast('Goal deleted.');}
+    catch(err){toast(err.message,true)}
+  });
+  el('donation-search-form').addEventListener('submit',async e=>{e.preventDefault();donationOffset=0;await refreshHistory().catch(err=>toast(err.message,true))});
+  el('donation-prev').addEventListener('click',()=>{donationOffset=Math.max(0,donationOffset-searchLimit);refreshHistory().catch(err=>toast(err.message,true))});
+  el('donation-next').addEventListener('click',()=>{donationOffset+=searchLimit;refreshHistory().catch(err=>toast(err.message,true))});
+}
+
 let snapshot = null, graphics = [], currentPreset = 'top3', activeTab = 'overview', toastTimeout;
 async function request(path, options={}) {
   const response = await fetch(path,{cache:'no-store',...options, headers:{'Content-Type':'application/json',...(options.headers||{})}});
@@ -14,18 +135,21 @@ const put = (url, obj) => request(url,{method:'PUT',body:JSON.stringify(obj)});
 function toast(message,error=false){const node=el('toast');node.textContent=message;node.classList.toggle('error',error);node.classList.remove('hidden');clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>node.classList.add('hidden'),5500)}
 function setTab(name){
   activeTab=name;
-  const titles={overview:'Operator overview',simulator:'Donation simulator',review:'Assignment queue',graphics:'Graphics Studio',settings:'Scoring & cast'};
+  const titles={overview:'Operator overview',simulator:'Donation simulator',review:'Assignment queue',graphics:'Graphics Studio',youtube:'YouTube live',goals:'Goals & ticker',settings:'Scoring & cast'};
   el('section-title').textContent=titles[name]||name;
   document.querySelectorAll('.tab-view').forEach(node=>node.classList.toggle('hidden',node.id!==`tab-${name}`));
   document.querySelectorAll('[data-tab]').forEach(node=>node.classList.toggle('selected',node.classList.contains('nav-button')&&node.dataset.tab===name));
+  if(name==='goals') refreshGoals().catch(e=>toast(e.message,true));
+  if(name==='review') refreshHistory().catch(e=>toast(e.message,true));
   if(name==='graphics') refreshGraphics().catch(e=>toast(e.message,true));
+  if(name==='youtube') refreshYouTube().catch(e=>toast(e.message,true));
   if(name==='settings'&&snapshot) updateCastList();
 }
 function renderRankList(rank,container){
   container.innerHTML = rank.length ? rank.map(m=>`<div class="rank-row"><span class="rank-num ${m.rank===1?'first':''}">${m.rank}</span><span class="rank-identity">${escaped(m.name)}</span><span class="rank-points">${Number(m.points).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} <small>PTS</small></span></div>`).join('') : '<p class="muted small">No cast yet.</p>';
 }
 function renderEvents(rows){
-  el('recent-list').innerHTML=rows.length?rows.map(e=>`<div class="event-row"><div class="event-main"><b>${escaped(e.donor)} · ${money(e.amount_micros)} ${escaped(e.currency)}</b><div class="event-meta">${escaped(e.kind==='superStickerEvent'?'Super Sticker':e.message||'(No message)')}<br>${escaped(e.id)}</div></div><span class="status-pill ${escaped(e.status)}">${escaped(e.status)}</span>${e.status==='assigned'?`<button class="btn small ghost event-correct" data-correct="${escaped(e.id)}">Correct</button>`:''}</div>`).join(''):'<p class="muted small">No simulated donations yet.</p>';
+  el('recent-list').innerHTML=rows.length?rows.map(e=>`<div class="event-row"><div class="event-main"><b>${escaped(e.donor)} · ${money(e.amount_micros)} ${escaped(e.currency)} <span class="status-pill">${e.source==='youtube'?'REAL YOUTUBE':'SIMULATED'}</span></b><div class="event-meta">${escaped(e.kind==='superStickerEvent'?'Super Sticker':e.message||'(No message)')}<br>${escaped(e.id)}</div></div><span class="status-pill ${escaped(e.status)}">${escaped(e.status)}</span>${e.status==='assigned'?`<button class="btn small ghost event-correct" data-correct="${escaped(e.id)}">Correct</button>`:''}</div>`).join(''):'<p class="muted small">No donations recorded yet.</p>';
   el('recent-list').querySelectorAll('[data-correct]').forEach(button=>button.addEventListener('click',async()=>{
     const row=rows.find(e=>e.id===button.dataset.correct),members=snapshot.cast.filter(c=>c.active);
     const newId=prompt('Assign to which cast ID? '+members.map(c=>`${c.id} (${c.name})`).join(', '),row.cast_id||'');
@@ -39,7 +163,7 @@ function renderEvents(rows){
 function renderQueue(rows){
   const options=(snapshot?.cast||[]).filter(x=>x.active).map(c=>`<option value="${escaped(c.id)}">${escaped(c.name)}</option>`).join('');
   el('pending-label').textContent=`${rows.length} shown`;
-  el('review-list').innerHTML=rows.length?rows.map(e=>`<div class="review-item" data-review="${escaped(e.id)}"><div class="review-body"><b>${escaped(e.donor)} · ${money(e.amount_micros)} ${escaped(e.currency)}</b><small>${escaped(e.kind==='superStickerEvent'?'Super Sticker':e.message||'No hashtag')} · ${escaped(e.status)}</small></div><div class="review-controls">${e.currency==='USD'?`<select aria-label="Assign cast member">${options}</select><input aria-label="Reason" value="Producer reviewed hashtag" placeholder="Reason"><button class="btn primary small" data-assign="${escaped(e.id)}">Assign</button>`:'<span class="status-pill review_currency">FX review required</span>'}</div></div>`).join(''):'<p class="muted small">No donations require review.</p>';
+  el('review-list').innerHTML=rows.length?rows.map(e=>`<div class="review-item" data-review="${escaped(e.id)}"><div class="review-body"><b>${escaped(e.donor)} · ${money(e.amount_micros)} ${escaped(e.currency)} <span class="status-pill">${e.source==='youtube'?'REAL YOUTUBE':'SIMULATED'}</span></b><small>${escaped(e.kind==='superStickerEvent'?'Super Sticker':e.message||'No hashtag')} · ${escaped(e.status)}</small></div><div class="review-controls">${e.currency==='USD'?`<select aria-label="Assign cast member">${options}</select><input aria-label="Reason" value="Producer reviewed hashtag" placeholder="Reason"><button class="btn primary small" data-assign="${escaped(e.id)}">Assign</button>`:'<span class="status-pill review_currency">FX review required</span>'}</div></div>`).join(''):'<p class="muted small">No donations require review.</p>';
   el('review-list').querySelectorAll('[data-assign]').forEach(button=>button.addEventListener('click',async()=>{
     const row=button.closest('.review-item'), select=row.querySelector('select'), reason=row.querySelector('input');
     try{await post('/api/assign',{donation_id:row.dataset.review,cast_id:select.value,reason:reason.value||'Producer review'});toast('Donation assigned. Scores and overlays updated.');await refreshState()}
@@ -57,12 +181,12 @@ function updateCastList(){
 }
 async function refreshState(){
   const s=await request('/api/state');snapshot=s;
-  el('sync-indicator').textContent='● Simulation connected';el('sync-indicator').className='pill ok';
+  el('sync-indicator').textContent='● Demo backend connected';el('sync-indicator').className='pill ok';
   el('stat-gross').textContent='$'+Number(s.gross_usd).toLocaleString('en-US',{minimumFractionDigits:2});
   el('stat-events').textContent=s.event_count;
   el('stat-pending').textContent=s.pending_count;
   el('stat-multiplier').textContent=s.points_per_usd+'×';
-  el('system-status').textContent=`Demo ledger • Revision ${s.revision} • Last changed ${new Date(s.updated_at).toLocaleString()} • No actual YouTube API connected • Render demo data is temporary`;
+  el('system-status').textContent=`DEMO MIXED SOURCE • Revision ${s.revision} • YouTube purchases ${s.youtube_event_count} ($${s.youtube_gross_usd} USD) • Simulated ${s.simulated_event_count} ($${s.simulated_gross_usd} USD) • Render demo data is temporary`;
   renderRankList(s.ranking,el('rank-list'));renderEvents(s.recent);if(activeTab==='review')renderQueue(s.pending);
   if(activeTab==='settings')updateCastList();
 }
@@ -84,8 +208,39 @@ async function refreshGraphics(){
   hydrateGraphic(graphics.find(x=>x.id===currentPreset)||graphics[0]);
 }
 function draftFromForm(){return{name:el('g-name').value,accent:el('g-color').value,position:el('g-position').value,scale:el('g-scale').value,title_en:el('g-title-en').value,title_ht:el('g-title-ht').value,duration:Number(el('g-duration').value),enabled:el('g-enabled').checked}}
+
+let youtubeFieldsInitialized = false;
+async function refreshYouTube(){
+  const s = await request('/api/youtube/status');
+  if (!youtubeFieldsInitialized) {
+    el('youtube-video').value=s.video_id||'';
+    el('youtube-enabled').checked=Boolean(s.enabled);
+    youtubeFieldsInitialized=true;
+  }
+  const status = s.connected?'● Listening to live chat':s.enabled?'● '+s.status:'○ Disabled';
+  el('youtube-status').textContent=status;
+  el('youtube-details').textContent=[
+    'API key configured: '+(s.api_key_configured?'Yes':'NO — add YOUTUBE_API_KEY in Render Environment'),
+    'Video ID: '+(s.video_id||'none'),
+    'Listener state: '+s.status,
+    'Paid events recorded in this process: '+s.events_recorded,
+    'Duplicates ignored: '+s.duplicates_skipped,
+    'Last poll: '+(s.last_checked||'not connected'),
+    'Minimum polling interval: '+s.poll_interval_seconds+' s',
+    s.error?'Error: '+s.error:''
+  ].filter(Boolean).join('\n');
+}
 function bind(){
+  bindGoals();
   document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.tab)));
+  el('youtube-form').addEventListener('submit',async e=>{
+    e.preventDefault();
+    try {
+      const result=await put('/api/youtube/config',{video:el('youtube-video').value,enabled:el('youtube-enabled').checked});
+      toast(result.enabled?'YouTube connection requested. Wait for LISTENING before testing a purchase.':'YouTube listener disabled.');
+      await refreshYouTube();
+    } catch(error) {toast(error.message,true)}
+  });
   el('simulate-form').addEventListener('submit',async e=>{
     e.preventDefault();try{
       const data={kind:el('sim-kind').value,amount:el('sim-amount').value,currency:el('sim-currency').value,donor:el('sim-donor').value,message:el('sim-message').value,event_id:el('sim-id').value||null};
@@ -112,7 +267,7 @@ function bind(){
   el('reset-button').addEventListener('click',async()=>{
     const confirmText=prompt('Type RESET DEMO to permanently erase simulated donations and alerts:');
     if(confirmText!=='RESET DEMO')return;
-    try{await post('/api/reset',{confirm:confirmText});toast('All demo donations reset.');await refreshState()}catch(err){toast(err.message,true)}
+    try{await post('/api/reset',{confirm:confirmText});toast('Simulated donations reset.');await refreshState()}catch(err){toast(err.message,true)}
   });
 }
-(async()=>{bind();try{await refreshState();el('points-multiplier').value=snapshot.points_per_usd;await refreshGraphics()}catch(e){el('sync-indicator').textContent='● Server not responding';el('sync-indicator').className='pill neutral';toast(e.message,true)}setInterval(()=>refreshState().catch(()=>{el('sync-indicator').textContent='● Connection lost';el('sync-indicator').className='pill neutral'}),1500)})();
+(async()=>{bind();try{await refreshState();el('points-multiplier').value=snapshot.points_per_usd;await refreshGraphics()}catch(e){el('sync-indicator').textContent='● Server not responding';el('sync-indicator').className='pill neutral';toast(e.message,true)}setInterval(()=>{if(activeTab==='youtube') refreshYouTube().catch(()=>{});if(activeTab==='goals')refreshGoals().catch(()=>{});},3500);setInterval(()=>refreshState().catch(()=>{el('sync-indicator').textContent='● Connection lost';el('sync-indicator').className='pill neutral'}),1500)})();

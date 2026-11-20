@@ -18,7 +18,7 @@ def sim(c, amount='20.00',message='#Marcus',kind='superChatEvent',event_id=None,
 def test_pages_serve(client):
     for url in ['/', '/producers','/overlay/top3','/overlay/alert','/overlay/full','/health']:
         assert client.get(url).status_code==200
-    assert 'SIMULATION' in client.get('/').text
+    assert 'DEMO' in client.get('/').text
     assert client.get('/overlay/unknown').status_code==404
 
 def test_superchat_updates_top3_and_alert(client):
