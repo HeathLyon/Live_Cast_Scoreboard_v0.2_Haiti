@@ -1,6 +1,6 @@
-# Render sandbox testing — Live Cast v0.2 Haiti
+# Render sandbox testing — Live Cast v0.5 Haiti
 
-**Simulation only, on Render Free:** This configuration contains **no real YouTube API connection and no Google Sheets integration.** Test records on Render's default filesystem are **ephemeral** and may vanish after restarts, redeployments, or infrastructure replacement. The app deliberately displays DEMO watermarks on all graphics.
+For YouTube setup and synchronized donation graphics, see [YouTube live demo](YOUTUBE_LIVE_DEMO.md). Render Free uses temporary SQLite. Records may disappear after restarts or redeployments, and the graphics display a DEMO watermark.
 
 ## Preflight
 
@@ -28,7 +28,9 @@
 8. To share **read-only** views with a producer or the vMix browser input, append your `VIEW_TOKEN` in the URL:
 
    - Producer display: `https://YOUR-RENDER-HOST.onrender.com/producers?view_token=YOUR_VIEW_TOKEN`
-   - Top 3: `https://YOUR-RENDER-HOST.onrender.com/overlay/top3?view_token=YOUR_VIEW_TOKEN`
+   - Top 3 + donation alert: `https://YOUR-RENDER-HOST.onrender.com/overlay/top3-alert?view_token=YOUR_VIEW_TOKEN`
+   - Goals: `https://YOUR-RENDER-HOST.onrender.com/overlay/goals?view_token=YOUR_VIEW_TOKEN`
+   - Persistent Top 3: `https://YOUR-RENDER-HOST.onrender.com/overlay/top3?view_token=YOUR_VIEW_TOKEN`
    - Alert: `https://YOUR-RENDER-HOST.onrender.com/overlay/alert?view_token=YOUR_VIEW_TOKEN`
    - Full: `https://YOUR-RENDER-HOST.onrender.com/overlay/full?view_token=YOUR_VIEW_TOKEN`
 
@@ -38,7 +40,7 @@
 
 - `render.yaml` defaults to the **Free** plan for testing. Free web services sleep after 15 minutes without inbound traffic and can take around a minute to wake; they also restart periodically. They are **not** suitable for a 24/7 live listener. Upgrade to a paid always-on service for production.
 - Only **one Uvicorn worker** and **one instance** are intended for this SQLite demo.
-- **Do not use for real competition scoring.** The Render demo has no Google Sheets storage, no automatic YouTube listener, no FX conversion, and no production-grade backups.
+- **Do not use for real competition scoring.** The Render demo uses temporary SQLite and supports USD scoring. YouTube listening requires a server-side API key.
 - `autoDeploy: false` prevents routine Git pushes from interrupting your running test. Trigger a manual deploy when you intend to update.
 - Current demo uses HTTP Basic for operator login. A future production release should replace this with individual user accounts, HTTPS cookie sessions, roles, audit logging, and rate limiting.
 - vMix and remote viewers connect directly to the Render-hosted browser pages for this test. GitHub Pages is **not required** to run this build remotely.
@@ -52,3 +54,11 @@ The same source runs on Windows with `setup_windows.bat` then `start_windows.bat
 - The Python app serves root HTML files directly. For nested `/overlay/top3` URLs, the browser resolves relative assets under `/overlay/css/` and `/overlay/js/`; the app explicitly serves those routes too.
 - CSS and JS are safe public assets. The API still requires an operator login or a read-only `VIEW_TOKEN` on approved GET routes.
 - If an existing paid Render service has already been created, editing `render.yaml` alone may not change its billing plan immediately. Check **Service → Settings → Instance Type** and switch to Free before confirming the deployment.
+
+## v0.5: Goals & searchable donation review
+
+After uploading the v0.5 code, deploy latest commit. Render `/health` will report `0.5.0`. In the English operator dashboard, open **Goals & ticker**. Creating a goal does not immediately put it on air: the global **Show goals ON AIR** switch initially defaults to OFF; enable it after you have set up a safe test goal. You can also enable/disable individual goals. The public `/public/goals` endpoint returns only broadcast-safe active goals while this switch is ON (requires `PUBLIC_OVERLAYS=1`).
+
+Open `https://heathlyon.github.io/Live_Cast_Scoreboard_v0.2_Haiti/pages-setup.html` to generate the new `graphic=goals` link for vMix. Use **Synchronized Top 3 and donation alert** for both donation-triggered cards in one vMix input. Put Goals in its own overlay input.
+
+For older ambiguous Super Chats use **Assignment queue → Search donation history**. Choose pending, search by donor, comment or event ID and assign with a written reason. All transactions in the demo remain temporary on Render Free; downloaded CSV is a manual snapshot, not a persistent backup. For production, select a managed durable database and backups before enabling real scoring.

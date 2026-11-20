@@ -1,4 +1,4 @@
-# Optional REMOTE SIMULATION only. No YouTube listener or durable database yet.
+# Remote demo with optional YouTube live chat. SQLite is ephemeral.
 # Before production, replace SQLite on the ephemeral filesystem with durable storage.
 services:
   - type: web
@@ -17,6 +17,10 @@ services:
         value: "1"
       - key: PAGES_ORIGIN
         value: "https://heathlyon.github.io"
+      # Optional: add YOUTUBE_API_KEY manually in Render Environment (never commit it).
+      # Set this to 10 only for a short demo; 50 is more quota-conscious.
+      - key: YOUTUBE_MIN_POLL_SECONDS
+        value: "50"
       - key: LIVECAST_DB
         value: /tmp/livecast-demo.sqlite3
       - key: PYTHON_VERSION
