@@ -118,13 +118,14 @@ class YouTubeMonitor:
                 'last_checked':self.last_checked, 'last_paid_at':self.last_paid_at,
                 'paid_messages_seen':self.seen_paid, 'events_recorded':self.imported,
                 'duplicates_skipped':self.duplicates,
-                'note':'This is a DEMO: simulated and YouTube events share the same rankings.'}
+                'note':'Production isolates tests from live rankings; staging may mix event sources.'}
 
     def _switch(self, vid):
         self.video_id = vid
         self.live_chat_id = ''
-        self._page_token = ''
-        self._primed = False
+        checkpoint = store.get_youtube_checkpoint(vid) if vid else None
+        self._page_token = checkpoint['page_token'] if checkpoint else ''
+        self._primed = bool(checkpoint and checkpoint['primed'])
         self.connected = False
         self.error = ''
         self.status = 'connecting' if vid else 'disabled'
@@ -182,8 +183,6 @@ class YouTubeMonitor:
         self.status = 'listening'
         self.error = ''
         token = doc.get('nextPageToken')
-        if isinstance(token,str):
-            self._page_token=token
         # On connecting, establish a baseline rather than replaying pre-existing donations.
         # Start monitoring before asking viewers to make a real Super Chat.
         if self._primed:
@@ -201,6 +200,9 @@ class YouTubeMonitor:
                     self.imported += 1
                 elif result['result'] == 'duplicate':
                     self.duplicates += 1
+        if isinstance(token, str):
+            store.save_youtube_checkpoint(self.video_id, token, True)
+            self._page_token = token
         self._primed = True
         try:
             official_wait = float(doc.get('pollingIntervalMillis') or 0) / 1000
@@ -245,4 +247,5 @@ class YouTubeMonitor:
                         self.live_chat_id = ''
                         self._page_token = ''
                         self._primed = False
+                        store.clear_youtube_checkpoint(self.video_id)
                     await self._sleep(stop, 25)

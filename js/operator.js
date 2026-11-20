@@ -83,7 +83,7 @@ function historyRow(e){
   </div>`;
 }
 async function refreshHistory(){
-  const params=new URLSearchParams({status:el('donation-filter').value,source:el('donation-source').value,q:el('donation-search').value,limit:String(searchLimit),offset:String(donationOffset)});
+  const params=new URLSearchParams({status:el('donation-filter').value,q:el('donation-search').value,limit:String(searchLimit),offset:String(donationOffset)});
   const result=await request('/api/donations?'+params);
   donationTotal=result.total;
   const div=el('donation-results');div.innerHTML=result.items.map(historyRow).join('')||'<p class="muted small">No matching donations.</p>';
@@ -135,13 +135,16 @@ const put = (url, obj) => request(url,{method:'PUT',body:JSON.stringify(obj)});
 function toast(message,error=false){const node=el('toast');node.textContent=message;node.classList.toggle('error',error);node.classList.remove('hidden');clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>node.classList.add('hidden'),5500)}
 function setTab(name){
   activeTab=name;
-  const titles={overview:'Operator overview',simulator:'Donation simulator',review:'Assignment queue',graphics:'Graphics Studio',youtube:'YouTube live',goals:'Goals & ticker',settings:'Scoring & cast'};
+  const titles={system:'Stats & health',overview:'Operator overview',data:'Donation data',simulator:'Debug & test events',review:'Assignment queue',graphics:'Graphics Studio',youtube:'YouTube live',goals:'Goals & ticker',settings:'Scoring & cast'};
   el('section-title').textContent=titles[name]||name;
   document.querySelectorAll('.tab-view').forEach(node=>node.classList.toggle('hidden',node.id!==`tab-${name}`));
   document.querySelectorAll('[data-tab]').forEach(node=>node.classList.toggle('selected',node.classList.contains('nav-button')&&node.dataset.tab===name));
   if(name==='goals') refreshGoals().catch(e=>toast(e.message,true));
   if(name==='review') refreshHistory().catch(e=>toast(e.message,true));
+  if(name==='system' && window.refreshSystemStatus)window.refreshSystemStatus();
   if(name==='graphics') refreshGraphics().catch(e=>toast(e.message,true));
+  if(name==='data' && window.loadDataPage)window.loadDataPage();
+  if(name==='simulator' && window.loadDebugEvents)window.loadDebugEvents();
   if(name==='youtube') refreshYouTube().catch(e=>toast(e.message,true));
   if(name==='settings'&&snapshot) updateCastList();
 }
@@ -181,12 +184,12 @@ function updateCastList(){
 }
 async function refreshState(){
   const s=await request('/api/state');snapshot=s;
-  el('sync-indicator').textContent='● Demo backend connected';el('sync-indicator').className='pill ok';
+  el('sync-indicator').textContent=s.live_mode?'● Live backend connected':'● Staging backend connected';el('sync-indicator').className='pill ok';
   el('stat-gross').textContent='$'+Number(s.gross_usd).toLocaleString('en-US',{minimumFractionDigits:2});
   el('stat-events').textContent=s.event_count;
   el('stat-pending').textContent=s.pending_count;
   el('stat-multiplier').textContent=s.points_per_usd+'×';
-  el('system-status').textContent=`DEMO MIXED SOURCE • Revision ${s.revision} • YouTube purchases ${s.youtube_event_count} ($${s.youtube_gross_usd} USD) • Simulated ${s.simulated_event_count} ($${s.simulated_gross_usd} USD) • Render demo data is temporary`;
+  el('system-status').textContent=`${s.mode} • Revision ${s.revision} • YouTube paid events: ${s.youtube_event_count} ($${s.youtube_gross_usd} USD) • Test events: ${s.simulated_event_count} ($${s.simulated_gross_usd} USD)`;
   renderRankList(s.ranking,el('rank-list'));renderEvents(s.recent);if(activeTab==='review')renderQueue(s.pending);
   if(activeTab==='settings')updateCastList();
 }
@@ -197,7 +200,8 @@ function hydrateGraphic(g){
   el('g-color').value=d.accent;el('g-position').value=d.position;el('g-scale').value=d.scale;
   el('g-duration').value=d.duration;el('g-enabled').checked=d.enabled;
   el('preview-link').href=`/overlay/${g.id}?preview=1`;
-  el('live-link').href=`/overlay/${g.id}`;
+  const publicUrl=g.public_url || `/overlay/${g.id}`;
+  el('live-link').href=publicUrl;el('graphic-url').value=publicUrl;
   document.querySelectorAll('.preset-item').forEach(n=>n.classList.toggle('active',n.dataset.preset===g.id));
 }
 async function refreshGraphics(){
@@ -245,7 +249,9 @@ function bind(){
     e.preventDefault();try{
       const data={kind:el('sim-kind').value,amount:el('sim-amount').value,currency:el('sim-currency').value,donor:el('sim-donor').value,message:el('sim-message').value,event_id:el('sim-id').value||null};
       const result=await post('/api/simulate',data);el('sim-result').textContent=JSON.stringify(result,null,2);
-      toast(result.result==='duplicate'?'Duplicate ID ignored: no points added.':result.result==='ignored'?'Free chat ignored for scoring.':'Test event recorded.');await refreshState();
+      toast(result.result==='duplicate'?'Duplicate ID ignored: no points added.':result.result==='ignored'?'Free chat ignored for scoring.':'Test event recorded.');
+      await refreshState();
+      if(window.loadDebugEvents)await window.loadDebugEvents();
     }catch(error){toast(error.message,true)}
   });
   el('settings-form').addEventListener('submit',async e=>{e.preventDefault();try{await put('/api/settings',{points_per_usd:el('points-multiplier').value});toast('New multiplier saved for FUTURE events only.');await refreshState()}catch(err){toast(err.message,true)}});
@@ -260,14 +266,16 @@ function bind(){
     await put(`/api/graphics/${currentPreset}/draft`,draftFromForm());await post(`/api/graphics/${currentPreset}/publish`,{});
     toast('Published. Existing graphic pages update automatically.');await refreshGraphics();
   }catch(err){toast(err.message,true)}});
+  el('copy-graphic-url').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(el('graphic-url').value);toast('vMix URL copied.')}catch(e){toast('Select and copy the URL field.',true)}});
   el('clone-form').addEventListener('submit',async e=>{e.preventDefault();try{
     const result=await post('/api/graphics',{source_id:el('clone-source').value,id:el('clone-id').value,name:el('clone-name').value});
-    currentPreset=result.id;toast('New graphic created with a stable URL.');await refreshGraphics();
+    currentPreset=result.id;toast('New graphic created. Publish it when you are ready.');await refreshGraphics();
+    el('graphic-url').select();
   }catch(err){toast(err.message,true)}});
   el('reset-button').addEventListener('click',async()=>{
     const confirmText=prompt('Type RESET DEMO to permanently erase simulated donations and alerts:');
     if(confirmText!=='RESET DEMO')return;
-    try{await post('/api/reset',{confirm:confirmText});toast('Simulated donations reset.');await refreshState()}catch(err){toast(err.message,true)}
+    try{await post('/api/reset',{confirm:confirmText});toast('All demo donations reset.');await refreshState()}catch(err){toast(err.message,true)}
   });
 }
-(async()=>{bind();try{await refreshState();el('points-multiplier').value=snapshot.points_per_usd;await refreshGraphics()}catch(e){el('sync-indicator').textContent='● Server not responding';el('sync-indicator').className='pill neutral';toast(e.message,true)}setInterval(()=>{if(activeTab==='youtube') refreshYouTube().catch(()=>{});if(activeTab==='goals')refreshGoals().catch(()=>{});},3500);setInterval(()=>refreshState().catch(()=>{el('sync-indicator').textContent='● Connection lost';el('sync-indicator').className='pill neutral'}),1500)})();
+(async()=>{bind();try{await refreshState();el('points-multiplier').value=snapshot.points_per_usd;await refreshGraphics()}catch(e){el('sync-indicator').textContent='● Server not responding';el('sync-indicator').className='pill neutral';toast(e.message,true)}setInterval(()=>{if(activeTab==='youtube') refreshYouTube().catch(()=>{});if(activeTab==='goals')refreshGoals().catch(()=>{});if(activeTab==='system' && window.refreshSystemStatus)window.refreshSystemStatus();},3500);setInterval(()=>refreshState().catch(()=>{el('sync-indicator').textContent='● Connection lost';el('sync-indicator').className='pill neutral'}),1500)})();

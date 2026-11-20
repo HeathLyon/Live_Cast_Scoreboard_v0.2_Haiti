@@ -13,7 +13,9 @@ def test_remote_demo_requires_credentials(tmp_path, monkeypatch):
     with TestClient(app_module.app) as client:
         assert client.get('/health').status_code == 200
         assert client.get('/css/style.css').status_code == 200
-        assert client.get('/js/operator.js').status_code == 200
+        javascript = client.get('/js/operator.js')
+        assert javascript.status_code == 200
+        assert javascript.headers['content-type'].split(';')[0] == 'text/javascript'
         assert client.get('/overlay/css/style.css').status_code == 200
         assert client.get('/overlay/js/overlay.js').status_code == 200
         assert client.get('/app.py').status_code == 401

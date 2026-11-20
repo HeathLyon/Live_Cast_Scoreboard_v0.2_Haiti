@@ -1,0 +1,46 @@
+# PRODUCTION TEMPLATE — deploy as a separate paid Blueprint/service, not on Render Free.
+# The render.yaml in this repository remains a staging/demo blueprint.
+services:
+  - type: web
+    name: live-cast-scoreboard-production
+    runtime: python
+    plan: 0.5c-512mb
+    autoDeployTrigger: 'off'
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    disk:
+      name: livecast-data
+      mountPath: /var/data
+      sizeGB: 5
+    envVars:
+      - key: LIVECAST_ENV
+        value: production
+      - key: LIVECAST_REMOTE_TEST
+        value: "1"
+      - key: PUBLIC_OVERLAYS
+        value: "1"
+      - key: PAGES_ORIGIN
+        value: https://heathlyon.github.io
+      - key: LIVECAST_PAGES_URL
+        value: https://heathlyon.github.io/Live_Cast_Scoreboard_v0.2_Haiti/
+      - key: LIVECAST_PUBLIC_URL
+        sync: false # Must match your final paid service HTTPS hostname.
+      - key: LIVECAST_DB
+        value: /var/data/livecast.sqlite3
+      - key: LIVECAST_PERSISTENT_ROOT
+        value: /var/data
+      - key: LIVECAST_REQUIRE_MOUNT
+        value: "1"
+      - key: LIVECAST_SERVER_QUEUE
+        value: "1"
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: LIVECAST_USERS_JSON
+        sync: false # Secret JSON: named accounts and their scrypt hashes.
+      # OPERATOR_PASSWORD is staging-only and should not be used as a shared
+      # login in production.
+      - key: VIEW_TOKEN
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false

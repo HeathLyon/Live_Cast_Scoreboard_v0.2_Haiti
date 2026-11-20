@@ -1,1 +1,2 @@
-Live Cast Scoreboard v0.5.0 — Goals, Cast & Donation Review Demo
+Live Cast Scoreboard Control Room 1.1.0-rc1
+65 automated tests passing; manual end-to-end on-air acceptance still required.
