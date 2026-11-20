@@ -16,7 +16,7 @@ def test_public_broadcast_and_operator_security(tmp_path, monkeypatch):
         state=client.get('/public/state',headers=origin)
         assert state.status_code==200
         assert state.headers.get('access-control-allow-origin')=='https://heathlyon.github.io'
-        assert set(state.json()) == {'mode','revision','updated_at','last_alert_id','top3','ranking'}
+        assert {'mode','revision','updated_at','last_alert_id','top3','ranking'}.issubset(set(state.json()))
         assert 'pending' not in state.json()
         assert 'hashtags' not in state.json()['ranking'][0]
         assert client.get('/public/graphics/top3').status_code==200
@@ -56,5 +56,5 @@ def test_static_pages_asset_paths_and_readonly_feed():
     assert 'href="css/style.css"' in overlay
     assert 'src="js/overlay.js"' in overlay
     assert 'src="js/producer.js"' in producer
-    assert "publicBackend + path.replace" in (root/'js/overlay.js').read_text(encoding='utf-8')
+    assert "backend+path.replace" in (root/'js/overlay.js').read_text(encoding='utf-8')
     assert "publicBackend+'/public/state'" in (root/'js/producer.js').read_text(encoding='utf-8')

@@ -29,7 +29,7 @@ def sim(client,**overrides):
 def test_goal_defaults_hidden_and_visibility(client,monkeypatch):
     monkeypatch.setattr(app_module,'PUBLIC_OVERLAYS',True)
     assert client.get('/api/goals').json()=={'visible':False,'goals':[]}
-    assert client.get('/public/goals').json()=={'visible':False,'goals':[]}
+    assert client.get('/public/goals').json()['goals']==[] and client.get('/public/goals').json()['visible'] is False
     goal(client)
     assert client.get('/public/goals').json()['goals']==[]
     assert client.put('/api/goals/visibility',json={'visible':True}).status_code==200

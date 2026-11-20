@@ -81,3 +81,27 @@ body:not(.overlay-body){background:#060f2a}
 .goal-clock{white-space:nowrap;color:#fff}
 @keyframes goal-enter{from{opacity:0;translate:0 22px}to{opacity:1;translate:0 0}}
 @media(max-width:720px){.goal-top{padding:13px;gap:8px}.goal-title{font-size:13px}.goal-count{font-size:26px}.goal-panel{left:12px;bottom:20px;width:calc(100vw - 24px)}.goal-track{margin:0 13px 8px}.goal-footer{padding:8px 13px;font-size:10px}}
+
+/* Operator control-room diagnostics */
+.status-tile-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:15px 0}
+.system-tile{display:flex;flex-direction:column;gap:9px;border:1px solid #34549e;background:#132958;border-radius:10px;padding:15px}
+.system-tile strong{font-size:13px;color:#fff}.system-tile small{font-size:12px;color:#b4c5e8;overflow-wrap:anywhere}
+.status-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px}
+.status-url-item{display:flex;flex-direction:column;gap:8px;border:1px solid #34549e;background:#132958;padding:14px;border-radius:10px;min-width:0}
+.status-url-item strong{font-size:12px}.status-url-item code{font-size:10px;line-height:1.5;overflow-wrap:anywhere;color:#b4c5e8}
+.status-url-item .button-row{display:flex;gap:6px;flex-wrap:wrap}
+/* Production control room v1.1: transaction explorer and protected test tools */
+.cast-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin:13px 0}
+.cast-data-card{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:6px;border:1px solid #304475;background:#142958;color:#fff;border-radius:12px;padding:14px;cursor:pointer}
+.cast-data-card:hover,.cast-data-card:focus{border-color:#8ca7ef;background:#1b3672}
+.cast-data-card strong{font-size:13px}.cast-data-card b{font-size:20px}.cast-data-card small{font-size:11px;color:#c6d3ee}
+.data-table-scroll{overflow-x:auto;width:100%;margin:17px 0}.ledger-table{width:100%;min-width:830px;border-collapse:collapse;text-align:left;font-size:12px}
+.ledger-table th,.ledger-table td{padding:12px 10px;border-bottom:1px solid #324677;vertical-align:middle}
+.ledger-table th{font-size:11px;color:#c3d3f3;text-transform:uppercase;letter-spacing:.05em;background:#142958}
+.ledger-table tr:hover td{background:#182c5a}.ledger-id{display:block;font-size:10px;color:#95a6c7;max-width:185px;overflow-wrap:anywhere;margin-top:5px}
+.transaction-dialog{color:#f6f8ff;background:#101b39;border:1px solid #52699c;border-radius:15px;padding:0;width:min(690px,calc(100vw - 24px));max-height:92vh;overflow:auto}
+.transaction-dialog::backdrop{background:rgba(0,0,0,.78)}.dialog-inner{padding:24px}.transaction-original{background:#142958;border:1px solid #304475;border-radius:10px;padding:13px;font-size:12px;line-height:1.5;margin:12px 0 17px;overflow-wrap:anywhere}
+.transaction-original p{margin:7px 0}.transaction-dialog label{font-size:12px;color:#d0dafa}.transaction-dialog input,.transaction-dialog select,.transaction-dialog textarea{width:100%;display:block;margin-top:7px;border:1px solid #415b97;border-radius:8px;background:#091632;color:#fff;padding:11px;font:inherit}
+.transaction-dialog textarea{resize:vertical}.transaction-dialog .event-row{margin:8px 0;overflow-wrap:anywhere}.transaction-dialog .event-meta{white-space:pre-wrap}
+#graphic-url{width:100%;background:#0a1836;color:#d1e4ff;border:1px solid #3a548b;padding:10px;border-radius:8px;overflow:hidden;text-overflow:ellipsis}
+#debug-list .review-item{padding:10px 14px}.debug-checkbox{accent-color:#d21034}.ledger-table button:focus-visible,.cast-data-card:focus-visible{outline:3px solid #fff;outline-offset:2px}

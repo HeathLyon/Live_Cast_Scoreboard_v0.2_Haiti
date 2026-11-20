@@ -1,6 +1,8 @@
 "use strict";
 const form = document.getElementById('link-form');
 const output = document.getElementById('generated-links');
+const configured=window.LIVECAST_SITE?.backendUrl||'';
+if(configured)document.getElementById('backend-url').value=configured;
 form.addEventListener('submit', (event) => {
   event.preventDefault();
   const input = document.getElementById('backend-url').value.trim().replace(/\/+$/, '');
@@ -11,6 +13,11 @@ form.addEventListener('submit', (event) => {
     output.textContent = 'Use only the HTTPS service origin, for example https://example.onrender.com'; return;
   }
   output.replaceChildren();
+  const note=document.createElement('p');note.className='muted small';
+  note.textContent=backend.origin===configured
+    ? 'Stable URLs use the configured backend '+configured+'.'
+    : 'These links use the backend you entered. Update js/site-config.js to use it for the stable URLs.';
+  output.append(note);
   const title = document.createElement('h3'); title.textContent = 'Ready-to-paste links'; output.append(title);
   const endpoints = [
     ['Synchronized Top 3 and donation alert', 'pages-overlay.html', 'top3-alert'],
@@ -22,7 +29,7 @@ form.addEventListener('submit', (event) => {
   ];
   for (const [name, page, graphic] of endpoints) {
     const url = new URL(page, location.href);
-    url.searchParams.set('backend', backend.origin);
+    if (backend.origin!==configured) url.searchParams.set('backend',backend.origin);
     if (graphic) url.searchParams.set('graphic', graphic);
     if (graphic === 'top3' && document.getElementById('donation-only-top3').checked) {
       url.searchParams.set('show', 'on-donation');

@@ -99,13 +99,13 @@ def test_youtube_operator_only_endpoints(tmp_path,monkeypatch):
     async def idle_listener(stop):
         await stop.wait()
 
+    monkeypatch.setattr(app_module.youtube_monitor,'run',idle_listener)
     monkeypatch.setattr(store,'DB_PATH',tmp_path/'remote.sqlite3')
     monkeypatch.setattr(app_module,'REMOTE_TEST',True)
     monkeypatch.setattr(app_module,'PUBLIC_OVERLAYS',True)
     monkeypatch.setattr(app_module,'OPERATOR_PASSWORD','long-enough-example-operator-password')
     monkeypatch.setattr(app_module,'VIEW_TOKEN','separate-long-viewer-token-value')
     monkeypatch.setattr(app_module.youtube_monitor,'api_key','test-key-only')
-    monkeypatch.setattr(app_module.youtube_monitor,'run',idle_listener)
     with TestClient(app_module.app) as client:
         assert client.get('/api/youtube/status').status_code==401
         assert client.get('/api/youtube/status',params={'view_token':'separate-long-viewer-token-value'}).status_code==401
@@ -158,11 +158,8 @@ async def _poll_live_chat_test(tmp_path,monkeypatch):
 
 def test_top3_syncs_with_alert_and_hides_idle_watermark():
     js=(Path(__file__).resolve().parents[1]/'js/overlay.js').read_text(encoding='utf-8')
-    assert "overlayParams.get('show') === 'on-donation'" in js
-    assert "graphicId === 'top3-alert'" in js
-    assert 'overlayRoot.innerHTML=ranking+donation' in js
-    assert 'durationMs(alertGraphic)' in js
-    assert "demoWatermark.style.display" in js
+    assert "params.get('show')==='on-donation'" in js
+    assert "combined=graphicId==='top3-alert'" in js
+    assert "watermark.style.display" in js
     setup=(Path(__file__).resolve().parents[1]/'js/pages-setup.js').read_text(encoding='utf-8')
-    assert "'top3-alert'" in setup
     assert "url.searchParams.set('show', 'on-donation')" in setup

@@ -1,180 +1,165 @@
 'use strict';
-// The overlay never displays raw viewer comments. Only configured cast names and points go on air.
-const overlayRoot = document.getElementById('overlay-root');
-const overlayParams = new URLSearchParams(location.search);
-// A static GitHub Pages graphic selects its template by ?graphic=top3 or ?graphic=alert.
-const graphicId = overlayParams.get('graphic') || decodeURIComponent(location.pathname.split('/').pop());
-// Donation-triggered version of Top 3 (the default without this switch stays persistent).
-const donationOnlyTop3 = graphicId === 'top3' && overlayParams.get('show') === 'on-donation';
-const combined = graphicId === 'top3-alert';
-let goalAlertCursor = null, goalUntil = 0;
-// ?backend=https://your-service.onrender.com chooses the public, read-only feed.
-const publicBackend = (overlayParams.get('backend') || '').trim().replace(/\/+$/, '');
-const staticMode = Boolean(publicBackend);
-if (staticMode && !/^https:\/\/[a-zA-Z0-9.-]+(?::[0-9]+)?$/.test(publicBackend)) {
-  throw new Error('The backend URL must be an HTTPS origin, without a path.');
-}
-const preview = overlayParams.get('preview') === '1';
-const viewToken = overlayParams.get('view_token') || '';
-const escapeHTML = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let graphic = null, alertGraphic = null, state = null, lastRevision = -1, alertCursor = null;
-// Keep the DEMO watermark visible while a card is on air, never during idle.
-const demoWatermark = document.getElementById('overlay-watermark');
-if (demoWatermark) {
-  const syncWatermark = () => {demoWatermark.style.display=overlayRoot.querySelector('.graphic-card, .goal-panel')?'':'none'};
-  new MutationObserver(syncWatermark).observe(overlayRoot,{childList:true});
-  syncWatermark();
-}
-
-let lastGoalSignature = '', lastGoalChoice = '';
-const fmtGoal = n => {
-  const num = Number(n);
-  return Number.isInteger(num) ? num.toLocaleString('en-US') : num.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+// v1.0: keep a single transparent browser layer in vMix. Never display donor messages.
+const root=document.getElementById('overlay-root');
+const watermark=document.getElementById('overlay-watermark');
+const params=new URLSearchParams(location.search);
+const graphicId=params.get('graphic') || decodeURIComponent(location.pathname.split('/').pop());
+const backend=(params.get('backend') || window.LIVECAST_SITE?.backendUrl || '').trim().replace(/\/+$/,'');
+const hosted=Boolean(backend);
+const preview=params.get('preview')==='1';
+const combined=graphicId==='top3-alert';
+const donationTop3=graphicId==='top3' && params.get('show')==='on-donation';
+const token=params.get('view_token')||'';
+if(hosted && !/^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(backend))throw Error('Invalid backend origin');
+const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const number=v=>Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const goalNumber=v=>Number(v).toLocaleString('en-US',{maximumFractionDigits:2});
+const api=async path=>{
+  const url=hosted ? backend+path.replace(/^\/api\/(overlay\/)?/,'/public/') : path;
+  const r=await fetch(url,{cache:'no-store',headers:hosted?{}:token?{'X-View-Token':token}:{}});
+  if(!r.ok)throw Error('Scoreboard '+r.status+' '+path);
+  return r.json();
 };
-function countdownUntil(value){
+let graphic=null, alertConfig=null, state=null, lastRevision=-1;
+let alertCursor=null, pending=[], activeLocal=null, localTimer=null, activeServerId=null, serverTimer=null;
+let goalVisibleId='', goalSignature='', goalTrigger=null, goalShowUntil=0;
+function updateWatermark(){
+  if(!watermark)return;
+  watermark.style.display=(root.querySelector('.graphic-card,.goal-panel') && !state?.live_mode)?'':'none';
+}
+new MutationObserver(updateWatermark).observe(root,{childList:true});updateWatermark();
+function card(config,content,kind){
+  const pos=config.position||'left',scale=config.scale||'normal';
+  return `<section class="graphic-card ${safe(kind)} pos-${safe(pos)} size-${safe(scale)}" style="--accent:${safe(config.accent||'#d21034')}">${content}</section>`;
+}
+function rankLine(m){return `<div class="graphic-row"><span class="grank">${Number(m.rank)}</span><span class="gname">${safe(m.name).toUpperCase()}</span><span class="gscore">${number(m.points)} <small>PWEN</small></span></div>`}
+function ranksHTML(){
+  if(!graphic?.enabled || !state)return '';
+  const entries=graphic.kind==='full' ? state.ranking : state.top3;
+  return card(graphic,`<p class="overlay-kicker">KLASMAN AN DIRÈK</p><h2><em>${safe(graphic.title_ht||'3 PREMYE YO')}</em></h2>${entries.map(rankLine).join('')||'<p>Pa gen done</p>'}`,graphic.kind);
+}
+function alertHTML(a){
+  if(!alertConfig?.enabled)return '';
+  if(a.kind==='summary'){
+    const total=number(a.total_points||0);
+    return card(alertConfig,`<p class="overlay-kicker">NOUVO SUPER CHATS</p><div class="donor-plus">${Number(a.count)} DONATIONS</div><h2>+${total} PWEN</h2><p>Multiple donations received. Updated standings appear alongside this summary.</p>`,'alert alert-entry');
+  }
+  const inner=`<p class="overlay-kicker">${safe(alertConfig.title_ht||'NOUVO SUPER CHAT')}</p><div class="donor-plus">+${number(a.delta_points)} PWEN</div><h2>${safe(a.cast_name).toUpperCase()}</h2><div class="alert-stats"><div><div class="alert-stat-label">NOUVO TOTAL</div><div class="alert-stat-value">${number(a.new_total)}</div></div><div><div class="alert-stat-label">POZISYON AKTYÈL</div><div class="alert-stat-value rank">#${Number(a.rank)}</div></div></div>`;
+  return card(alertConfig,inner,'alert alert-entry');
+}
+function showDonation(a){
+  root.innerHTML=((combined || donationTop3)?ranksHTML():'')+(donationTop3?'':alertHTML(a));
+  updateWatermark();
+}
+function renderStatic(){root.innerHTML=ranksHTML();updateWatermark()}
+function durationMs(){return Math.max(2000,Number(alertConfig?.duration||6)*1000)}
+function clearLocalAlert(){
+  clearTimeout(localTimer);
+  localTimer=null;
+  activeLocal=null;
+  root.innerHTML='';
+}
+function playLocalQueue(){
+  if(activeLocal||!pending.length||!alertConfig?.enabled)return;
+  activeLocal=pending.shift();
+  showDonation(activeLocal);
+  localTimer=setTimeout(()=>{clearLocalAlert();playLocalQueue()},durationMs());
+}
+async function pollLocalAlerts(latest){
+  if(alertCursor===null){alertCursor=latest;return;}
+  if(latest<alertCursor){alertCursor=latest;pending=[];clearLocalAlert();return;}
+  const oldest=activeLocal || pending[0];
+  const limit=Math.max(1,200-pending.length);
+  const check=oldest && state.revision!==lastRevision;
+  if(check || (latest>alertCursor && pending.length<200)){
+    const r=await api('/api/alerts?after='+alertCursor+'&limit='+limit+
+      (check?'&check_after='+(oldest.seq-1):''));
+    const cancelled=new Set(r.cancelled || []);
+    pending=pending.filter(a=>!cancelled.has(a.seq));
+    if(cancelled.has(activeLocal?.seq))clearLocalAlert();
+    for(const a of r.alerts){if(a.seq>alertCursor){alertCursor=a.seq;pending.push(a)}}
+    if(r.alerts.length<limit)alertCursor=Math.max(alertCursor,latest);
+  }
+  playLocalQueue();
+}
+function remaining(value){
   if(!value)return '';
   const seconds=Math.max(0,Math.ceil((new Date(value).getTime()-Date.now())/1000));
   if(!Number.isFinite(seconds))return '';
-  const days=Math.floor(seconds/86400), h=String(Math.floor((seconds%86400)/3600)).padStart(2,'0'),
-        m=String(Math.floor((seconds%3600)/60)).padStart(2,'0'), s=String(seconds%60).padStart(2,'0');
-  return (days ? days+'d ' : '')+h+':'+m+':'+s;
+  const days=Math.floor(seconds/86400),h=Math.floor(seconds%86400/3600),m=Math.floor(seconds%3600/60),s=seconds%60;
+  return (days?days+'d ':'')+[h,m,s].map(v=>String(v).padStart(2,'0')).join(':');
 }
-function renderGoal(g){
-  const label = g.metric==='manual'?'MANUAL GOAL':g.metric==='youtube_usd'?'REAL YOUTUBE GOAL':
-    g.metric==='donations_usd'?'DONATION GOAL':g.metric==='cast_points'?'CAST SCORE GOAL':'CAST POINTS GOAL';
-  const unit=(g.metric==='youtube_usd'||g.metric==='donations_usd')?'$':'';
-  overlayRoot.innerHTML=`<section class="goal-panel">
-    <div class="goal-top"><div><div class="goal-subtitle">${label}</div><div class="goal-title">${escapeHTML(g.title)}</div></div>
-    <div class="goal-count">${unit}${fmtGoal(g.current)} <small>/ ${unit}${fmtGoal(g.target)}</small></div></div>
-    <div class="goal-track"><div class="goal-bar" style="width:${Math.min(100,Math.max(0,Number(g.percent)))}%"></div></div>
-    <div class="goal-footer"><span class="goal-ticker">${escapeHTML(g.ticker||'MÈSI POU SIPÒ NOU • LIVE CAST')}</span>
-      <span class="goal-clock" id="goal-clock"></span><span>${Math.round(Number(g.percent))}%</span></div>
-  </section>`;
+function drawGoal(g){
+  const labels={manual:'MANUAL GOAL',youtube_usd:'REAL YOUTUBE GOAL',donations_usd:'DONATION GOAL',cast_points:'CAST SCORE GOAL',assigned_points:'CAST POINTS GOAL'};
+  const unit=['youtube_usd','donations_usd'].includes(g.metric)?'$':'';
+  root.innerHTML=`<section class="goal-panel"><div class="goal-top"><div><div class="goal-subtitle">${labels[g.metric]||'GOAL'}</div><div class="goal-title">${safe(g.title)}</div></div><div class="goal-count">${unit}${goalNumber(g.current)} <small>/ ${unit}${goalNumber(g.target)}</small></div></div><div class="goal-track"><div class="goal-bar" style="width:${Math.min(100,Math.max(0,Number(g.percent)))}%"></div></div><div class="goal-footer"><span class="goal-ticker">${safe(g.ticker||'MÈSI POU SIPÒ NOU • LIVE CAST')}</span><span class="goal-clock" id="goal-clock"></span><span>${Math.round(Number(g.percent))}%</span></div></section>`;
 }
 async function tickGoals(){
-  try{
-    const data = await json('/api/overlay/goals');
-    const eligible=data.visible?data.goals.filter(g=>g.enabled):[];
-    const desired=overlayParams.get('goal');
-    const target=desired ? eligible.find(g=>g.id===desired): eligible.length ? eligible[Math.floor(Date.now()/8000)%eligible.length]:null;
-    // Optional: show the goal only alongside donation alerts (permanent is default).
-    if(overlayParams.get('show')==='on-donation'){
-      const [current, config] = await Promise.all([json('/api/state'),json('/api/graphics/alert')]);
-      if(goalAlertCursor!==null && current.last_alert_id>goalAlertCursor && config.enabled){
-        goalUntil=Date.now()+durationMs(config);
+  const g=await api('/api/overlay/goals');state={live_mode:Boolean(g.live_mode)};
+  const eligible=g.visible?(g.goals||[]).filter(x=>x.enabled):[];
+  const id=params.get('goal');
+  const selected=id ? eligible.find(x=>x.id===id) : eligible[Math.floor(Date.now()/8000)%eligible.length];
+  if(params.get('show')==='on-donation'){
+    const [s,conf]=await Promise.all([api('/api/state'),api('/api/graphics/alert')]);
+    if(s.broadcast_queue_enabled){
+      const playback=await api('/api/playback');
+      if(!conf.enabled || playback.paused || !playback.active ||
+         Date.parse(playback.active.ends_at)<=Date.parse(playback.server_time)){
+        root.innerHTML='';goalSignature='';updateWatermark();return;
       }
-      goalAlertCursor=current.last_alert_id;
-      if(Date.now()>=goalUntil){overlayRoot.innerHTML='';lastGoalSignature='';return;}
+    }else{
+      if(goalTrigger!==null && s.last_alert_id>goalTrigger && conf.enabled)goalShowUntil=Date.now()+Math.max(2000,Number(conf.duration||6)*1000);
+      goalTrigger=s.last_alert_id;
+      if(Date.now()>=goalShowUntil){root.innerHTML='';goalSignature='';updateWatermark();return;}
     }
-    if(!target){overlayRoot.innerHTML='';lastGoalSignature='';lastGoalChoice='';return;}
-    const signature=JSON.stringify(target);
-    if(signature!==lastGoalSignature || lastGoalChoice!==target.id){
-      renderGoal(target);lastGoalSignature=signature;lastGoalChoice=target.id;
-    }
-    const clock=document.getElementById('goal-clock');
-    if(clock)clock.textContent=target.ends_at?'RETE: '+countdownUntil(target.ends_at):'';
-  }catch(err){
-    // Do not air potentially incorrect goal totals when backend goes offline.
-    overlayRoot.innerHTML='';lastGoalSignature='';lastGoalChoice='';
   }
-}
-
-let alertQueue = [], alertTimer = null, graphicSignature = '';
-const fmt = v => Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-const durationMs = config => Math.max(2000,Number(config.duration||6)*1000);
-async function json(path){
-  // Render's private endpoints still work as before; Pages never uses the operator API.
-  const target = staticMode ? publicBackend + path.replace(/^\/api\/(overlay\/)?/, '/public/') : path;
-  const headers = staticMode ? {} : (viewToken ? {'X-View-Token':viewToken} : {});
-  const res = await fetch(target,{cache:'no-store',headers});
-  if(!res.ok) throw Error('Scoreboard API returned '+res.status);
-  return res.json();
-}
-function card(config,content,kind){
-  const pos=config.position||'left',scale=config.scale||'normal';
-  return `<section class="graphic-card ${kind} pos-${pos} size-${scale}" style="--accent:${escapeHTML(config.accent)}">${content}</section>`;
-}
-function rankLine(m){return `<div class="graphic-row"><span class="grank">${Number(m.rank)}</span><span class="gname">${escapeHTML(m.name).toUpperCase()}</span><span class="gscore">${fmt(m.points)} <small>PWEN</small></span></div>`}
-function rankingMarkup(){
-  if(!graphic || !state || !graphic.enabled)return '';
-  const selected = graphic.kind === 'full'?state.ranking:state.top3;
-  const title=escapeHTML(graphic.title_ht || (graphic.kind === 'full'?'KLASMAN AN DIRÈK':'3 PREMYE YO'));
-  return card(graphic,`<p class="overlay-kicker">KLASMAN AN DIRÈK</p><h2><em>${title}</em></h2>${selected.map(rankLine).join('')||'<p>Pa gen done</p>'}`,graphic.kind);
-}
-function alertMarkup(config,a){
-  if(!config.enabled)return '';
-  const title=escapeHTML(config.title_ht||'NOUVO SUPER CHAT');
-  const content=`<p class="overlay-kicker">${title}</p><div class="donor-plus">+${fmt(a.delta_points)} PWEN</div><h2>${escapeHTML(a.cast_name).toUpperCase()}</h2><div class="alert-stats"><div><div class="alert-stat-label">NOUVO TOTAL</div><div class="alert-stat-value">${fmt(a.new_total)}</div></div><div><div class="alert-stat-label">POZISYON AKTYÈL</div><div class="alert-stat-value rank">#${Number(a.rank)}</div></div></div>`;
-  return card(config,content,'alert alert-entry');
-}
-function clearDonationGraphic(){
-  clearTimeout(alertTimer);
-  alertTimer=null;
-  overlayRoot.innerHTML='';
-}
-function playQueue(){
-  if(alertTimer!==null || !alertQueue.length || !alertGraphic?.enabled)return;
-  const alert=alertQueue.shift();
-  const ranking=(combined || donationOnlyTop3) ? rankingMarkup() : '';
-  const donation=donationOnlyTop3 ? '' : alertMarkup(alertGraphic,alert);
-  overlayRoot.innerHTML=ranking+donation;
-  alertTimer=setTimeout(()=>{
-    clearDonationGraphic();
-    playQueue();
-  },durationMs(alertGraphic));
-}
-async function fetchAlerts(lastKnownId){
-  const batchSize = 200;
-  const next = await json('/api/alerts?after='+alertCursor+'&limit='+batchSize);
-  for(const item of next.alerts){
-    if(item.seq > alertCursor){alertCursor=item.seq;alertQueue.push(item)}
-  }
-  // The sequence can include alerts removed by a simulation reset.
-  if(next.alerts.length<batchSize)alertCursor=Math.max(alertCursor,lastKnownId);
-  playQueue();
+  if(!selected){root.innerHTML='';goalSignature='';goalVisibleId='';updateWatermark();return;}
+  const signature=JSON.stringify(selected);
+  if(signature!==goalSignature || selected.id!==goalVisibleId){drawGoal(selected);goalSignature=signature;goalVisibleId=selected.id}
+  const timer=document.getElementById('goal-clock');
+  if(timer)timer.textContent=selected.ends_at?'RETE: '+remaining(selected.ends_at):'';
+  updateWatermark();
 }
 async function tick(){
-  if(graphicId==='goals'){await tickGoals();return;}
   try{
-    const id=combined ? 'top3' : graphicId;
-    const [current, config, sharedAlert] = await Promise.all([
-      json('/api/state'),
-      json('/api/graphics/'+encodeURIComponent(id)+(preview?'?preview=true':'')),
-      (combined || donationOnlyTop3) && !preview ? json('/api/graphics/alert') : null
+    if(graphicId==='goals'){await tickGoals();return;}
+    const fetchId=combined?'top3':graphicId;
+    const [s,g,extra]=await Promise.all([
+      api('/api/state'),
+      api('/api/graphics/'+encodeURIComponent(fetchId)+(preview?'?preview=true':'')),
+      (combined || donationTop3) && !preview ? api('/api/graphics/alert') : null
     ]);
-    state=current;graphic=config;
-    if(preview){document.getElementById('overlay-watermark').textContent='TÈS / DEMO · DRAFT PREVIEW'}
-    const sig=JSON.stringify(graphic);
-    if(preview && graphic.kind==='alert'){
-      if(sig!==graphicSignature){
-        overlayRoot.innerHTML=alertMarkup(graphic,{cast_name:'EXAMPLE CAST',delta_points:'25.00',new_total:'1250.00',rank:4});
-      }
-    }else if(!preview && (combined || donationOnlyTop3 || graphic.kind==='alert')){
-      alertGraphic=sharedAlert || graphic;
-      if(!alertGraphic.enabled || (donationOnlyTop3 && !graphic.enabled) ||
-         (alertCursor!==null && current.last_alert_id<alertCursor)){
-        alertQueue=[];
-        clearDonationGraphic();
-        alertCursor=current.last_alert_id;
-      }else if(alertCursor===null){
-        alertCursor=current.last_alert_id;
-      }else if(current.last_alert_id>alertCursor){
-        await fetchAlerts(current.last_alert_id);
-      }
-    }else if(sig!==graphicSignature || current.revision!==lastRevision){
-      overlayRoot.innerHTML=rankingMarkup();
+    state=s;graphic=g;alertConfig=extra || g;
+    if(preview){
+      if(graphicId==='alert')showDonation({cast_name:'EXAMPLE CAST',delta_points:'25.00',new_total:'1250.00',rank:4});
+      else renderStatic();
+      return;
     }
-    graphicSignature=sig;lastRevision=current.revision;
-  }catch(error){
-    // If API is unavailable, never pretend an alert is still live.
-    if(graphic && graphic.kind!=='alert' && !combined && !donationOnlyTop3){
-      const previous=overlayRoot.innerHTML;
-      if(previous && !previous.includes('DEKONEKTE'))overlayRoot.innerHTML=previous+'<div class="draft-watermark">DEKONEKTE — DONE YO KA PA AJOU</div>';
+    if(!combined && !donationTop3 && graphic.kind!=='alert'){
+      if(s.revision!==lastRevision)renderStatic();
+    }else if(s.broadcast_queue_enabled){
+      // The backend is the sole playback clock; all vMix browsers see the same active item.
+      const q=await api('/api/playback');
+      const active=q.paused?null:q.active;
+      const remainingMs=active ? Date.parse(active.ends_at)-Date.parse(q.server_time) : 0;
+      clearTimeout(serverTimer);
+      if(active && remainingMs>0 && alertConfig.enabled && (!donationTop3 || graphic.enabled)){
+        if(activeServerId!==active.id){activeServerId=active.id;showDonation(active)}
+        serverTimer=setTimeout(()=>{activeServerId=null;root.innerHTML=''},remainingMs);
+      } else if(activeServerId!==null || root.innerHTML){activeServerId=null;root.innerHTML=''}
+    }else if(!alertConfig.enabled || (donationTop3 && !graphic.enabled)){
+      pending=[];clearLocalAlert();alertCursor=s.last_alert_id;
+    }else{
+      await pollLocalAlerts(s.last_alert_id);
     }
+    lastRevision=s.revision;updateWatermark();
+  }catch(err){
+    // Stale graphics must not be misrepresented as current production results.
+    if(graphicId==='goals'||combined||graphic?.kind==='alert'||donationTop3){
+      pending=[];clearLocalAlert();activeServerId=null;goalSignature='';updateWatermark();
+    }
+    else if(root.innerHTML && !root.innerHTML.includes('DEKONEKTE'))root.innerHTML+='<div class="draft-watermark">DEKONEKTE — DONE YO KA PA AJOU</div>';
   }
 }
-async function pollOverlay(){
-  await tick();
-  setTimeout(pollOverlay,1200);
-}
-pollOverlay();
+async function loop(){await tick();setTimeout(loop,1200)}
+loop();
